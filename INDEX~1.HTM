@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цахилгааны нэгж · Өдөр тутмын мэдээ</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{--base:#0b1020;--panel:#121a2e;--panel2:#172139;--line:#243049;
+    --accent:#2e8bff;--teal:#1ec8c8;--ok:#2fd07a;--warn:#ffb020;--danger:#ff4d4f;--muted:#8ea2c0;--text:#e6edf7;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;color:var(--text);
+    background:radial-gradient(1200px 600px at 80% -10%,rgba(46,139,255,.08),transparent),
+               radial-gradient(900px 500px at -10% 20%,rgba(30,200,200,.06),transparent),var(--base);min-height:100vh}
+  .glass{background:linear-gradient(180deg,rgba(23,33,57,.9),rgba(18,26,46,.9));border:1px solid var(--line);border-radius:16px}
+  .app{display:flex;min-height:100vh}
+  aside{width:240px;flex-shrink:0;border-right:1px solid var(--line);background:rgba(18,26,46,.6);
+    display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .brand{display:flex;gap:10px;align-items:center;padding:16px;border-bottom:1px solid var(--line)}
+  .brand .logo{width:38px;height:38px;border-radius:11px;background:rgba(46,139,255,.2);color:var(--accent);display:grid;place-items:center;font-size:20px}
+  .brand b{font-size:14px} .brand small{color:var(--muted);font-size:11px;display:block}
+  nav{flex:1;overflow:auto;padding:8px}
+  nav a{display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:10px;color:var(--muted);text-decoration:none;font-size:14px;cursor:pointer}
+  nav a:hover{background:rgba(255,255,255,.05);color:#fff}
+  nav a.active{background:rgba(46,139,255,.15);color:var(--accent)}
+  main{flex:1;min-width:0;display:flex;flex-direction:column}
+  header{position:sticky;top:0;z-index:10;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    padding:12px 20px;border-bottom:1px solid var(--line);background:rgba(18,26,46,.85);backdrop-filter:blur(8px)}
+  header h1{font-size:18px;margin:0}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--ok);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .content{padding:20px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:none;border:0;color:var(--muted);padding:6px 12px;font-size:12px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#fff}
+  input,select,textarea{background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:8px 10px;font-size:14px;width:100%;outline:none;font-family:inherit}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  .grid{display:grid;gap:12px}
+  .kpis{grid-template-columns:repeat(6,1fr)}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)} aside{position:fixed;left:-240px;z-index:50;transition:.2s} aside.open{left:0} .menu-btn{display:block!important} .col3,.col2{grid-template-columns:1fr!important}}
+  .card{padding:16px;position:relative;overflow:hidden;animation:rise .35s both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+  .kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .kpi .val{font-size:26px;font-weight:700;margin-top:6px}
+  .kpi .sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .t-accent{color:var(--accent)} .t-ok{color:var(--ok)} .t-warn{color:var(--warn)}
+  .t-danger{color:var(--danger)} .t-teal{color:var(--teal)} .t-muted{color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;padding:11px;border-bottom:1px solid var(--line)}
+  td{padding:10px 11px;border-bottom:1px solid rgba(36,48,73,.5)}
+  tr:hover td{background:rgba(255,255,255,.03)}
+  .badge{padding:2px 8px;border-radius:7px;font-size:12px;font-weight:500}
+  .b-ok{background:rgba(47,208,122,.15);color:var(--ok)} .b-accent{background:rgba(46,139,255,.15);color:var(--accent)}
+  .b-warn{background:rgba(255,176,32,.15);color:var(--warn)} .b-danger{background:rgba(255,77,79,.15);color:var(--danger)}
+  .b-teal{background:rgba(30,200,200,.15);color:var(--teal)} .b-muted{background:rgba(255,255,255,.06);color:var(--muted)}
+  .btn{background:var(--accent);border:0;color:#fff;border-radius:9px;padding:10px 18px;font-size:14px;cursor:pointer;font-family:inherit}
+  .btn:hover{filter:brightness(1.08)} .btn-sm{padding:7px 12px;font-size:13px}
+  .del{background:none;border:0;color:var(--danger);cursor:pointer;font-size:16px;padding:2px 8px;border-radius:6px}
+  .del:hover{background:rgba(255,77,79,.12)}
+  .field{display:block} .field span{font-size:12px;color:var(--muted)} .field>div,.field input,.field select,.field textarea{margin-top:5px}
+  .section-title{font-size:14px;font-weight:600;margin:0 0 12px;display:flex;gap:8px;align-items:center}
+  .menu-btn{display:none;background:none;border:0;color:var(--text);font-size:22px;cursor:pointer}
+  .hidden{display:none} .login-wrap{display:grid;place-items:center;min-height:100vh;padding:16px} .muted{color:var(--muted)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .col3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .col2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .note{background:rgba(46,139,255,.08);border:1px solid rgba(46,139,255,.2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted)}
+  .toast{position:fixed;bottom:20px;right:20px;padding:12px 18px;border-radius:10px;font-size:14px;z-index:99;animation:rise .3s}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chip{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 14px;font-size:13px}
+  .addbar{display:flex;gap:8px;margin-top:6px}
+  .tot td{font-weight:700;background:rgba(46,139,255,.06)}
+</style>
+</head>
+<body>
+
+<div id="login" class="login-wrap">
+  <form class="glass card" style="width:340px" onsubmit="doLogin(event)">
+    <div class="brand" style="border:0;padding:0 0 18px"><div class="logo">⚡</div>
+      <div><b>Цахилгааны нэгж</b><small>Өдөр тутмын мэдээ / тайлангийн систем</small></div></div>
+    <label class="field"><span>Нэвтрэх нэр</span><input id="lu" autocomplete="username"></label>
+    <div style="height:10px"></div>
+    <label class="field"><span>Нууц үг</span><input id="lp" type="password" autocomplete="current-password"></label>
+    <div style="height:16px"></div><button class="btn" style="width:100%">Нэвтрэх</button>
+    <div class="muted" style="font-size:11px;margin-top:14px;line-height:1.6">Хэрэглэгчээ админ үүсгэнэ. Анхны админ: <b>admin / admin123</b></div>
+  </form>
+</div>
+
+<div id="app" class="app hidden">
+  <aside id="side">
+    <div class="brand"><div class="logo">⚡</div><div><b>Цахилгааны нэгж</b><small>НБҮГ-ЗТХ · Тайлан</small></div></div>
+    <nav id="nav"></nav>
+    <div style="padding:12px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center">
+      <div style="flex:1;min-width:0"><div id="who" style="font-size:13px">—</div><div class="muted" style="font-size:11px" id="whoRole">—</div></div>
+      <button class="btn" style="background:none;color:var(--muted);padding:6px" onclick="logout()" title="Гарах">⏻</button>
+    </div>
+  </aside>
+  <main>
+    <header>
+      <button class="menu-btn" onclick="document.getElementById('side').classList.toggle('open')">☰</button>
+      <span class="dot"></span><h1 id="title">Нүүр</h1>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="seg" id="presets"></div>
+        <input type="date" id="dFrom" style="width:auto" onchange="setCustom()"><span class="muted">—</span>
+        <input type="date" id="dTo" style="width:auto" onchange="setCustom()">
+      </div>
+    </header>
+    <div class="content" id="view"></div>
+  </main>
+</div>
+
+<script>
+/* ============ Серверийн холболт ============ */
+let TOKEN=localStorage.getItem('tk')||null, ME=null, DB=null;
+const authHdr=()=>({Authorization:'Bearer '+TOKEN});
+const jsonHdr=()=>({...authHdr(),'Content-Type':'application/json'});
+async function api(path,opts={}){const r=await fetch(path,opts);if(r.status===401){logout();throw new Error('auth');}
+  const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Алдаа');return d;}
+async function apiLoad(){DB=await api('/api/data',{headers:authHdr()});}
+let saveT=null;
+function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
+  fetch('/api/data',{method:'PUT',headers:jsonHdr(),body:JSON.stringify(DB)})
+    .then(r=>{if(!r.ok)r.json().then(e=>toast(e.error||'Хадгалах алдаа гарлаа'));});},250);}
+
+const STATUSES=['Нээлттэй','Хийгдэж буй','Дууссан','Цуцлагдсан'];
+const PRIOS=['Бага','Дунд','Өндөр','Эгзэгтэй'];
+const ISO_TYPES=['Стандарт','Групп'];
+const ISO_STATUS=['Тусгаарласан','Сэргээсэн','Шилжүүлсэн'];
+const SHIFT_DN=['Өдөр','Шөнө'];
+const ROLES=[['ADMIN','Админ'],['CHIEF','Ахлах инженер'],['EE','Цахилгааны инженер'],['TECH','Техникч'],['VIEWER','Үзэгч']];
+const roleLabel=r=>(ROLES.find(x=>x[0]===r)||[r,r])[1];
+
+/* ============ Туслах ============ */
+function downtimeOf(w){if(w.down!=null)return w.down;if(w.start&&w.finish){let m=(new Date(w.finish)-new Date(w.start))/60000;return m>0?Math.round(m):0;}return 0;}
+function inRange(date){return date>=RANGE.from&&date<=RANGE.to;}
+const isPlanned=t=>['Төлөвлөгөөт','PM'].includes(t);
+const isUnplanned=t=>['Төлөвлөгөөт бус','CM','Шуурхай дуудлага'].includes(t);
+const isClosed=s=>['Дууссан','Цуцлагдсан'].includes(s);
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+const isoPD=i=>i.pd||i.loto||'';
+const isoStatus=i=>i.status||'Тусгаарласан';
+const isoShift=i=>i.shift||'—';
+const num=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
+const unitEnergy=(e,f)=>f>0?Math.round(e/f*100)/100:0;
+
+/* ============ KPI ============ */
+function kpis(){
+  const wos=DB.wos.filter(w=>inRange(w.date)),reps=DB.reports.filter(r=>inRange(r.date));
+  const isos=DB.isolations.filter(i=>inRange(i.date)),ens=DB.energy.filter(e=>inRange(e.date));
+  const faults=wos.filter(w=>w.fault);
+  const totalDown=wos.reduce((s,w)=>s+downtimeOf(w),0),faultDown=faults.reduce((s,w)=>s+downtimeOf(w),0);
+  const days=Math.max(1,(new Date(RANGE.to)-new Date(RANGE.from))/86400000+1),opMin=days*24*60;
+  const mttr=faults.length?faultDown/faults.length:0;
+  const mtbf=faults.length?(opMin-faultDown)/faults.length/60:0;
+  const avail=opMin?Math.max(0,(opMin-faultDown)/opMin*100):100;
+  const workHours=reps.reduce((s,r)=>s+(r.head||0)*12,0);
+  const done=wos.filter(w=>isClosed(w.status)).length;
+  const totFeed=ens.reduce((s,e)=>s+(+e.feed||0),0),totEn=ens.reduce((s,e)=>s+(+e.energy||0),0);
+  return {total:wos.length,done,planned:wos.filter(w=>isPlanned(w.type)).length,
+    unplanned:wos.filter(w=>isUnplanned(w.type)).length,faults:faults.length,
+    open:wos.filter(w=>!isClosed(w.status)).length,critical:wos.filter(w=>w.prio==='Эгзэгтэй'&&!isClosed(w.status)).length,
+    isoStd:isos.filter(i=>i.type==='Стандарт').length,isoGrp:isos.filter(i=>i.type==='Групп').length,
+    down:totalDown,mttr:Math.round(mttr),mtbf:Math.round(mtbf),avail:Math.round(avail*100)/100,workHours,
+    completion:wos.length?Math.round(done/wos.length*100):0,unitEnergy:unitEnergy(totEn,totFeed),totFeed,totEn};
+}
+function workTypeCounts(){const wos=DB.wos.filter(w=>inRange(w.date));const m={};DB.types.forEach(t=>m[t]=0);
+  wos.forEach(w=>{m[w.type]=(m[w.type]||0)+1;});return Object.entries(m).filter(([t,c])=>c>0).sort((a,b)=>b[1]-a[1]);}
+function trend(){const map={};DB.wos.filter(w=>inRange(w.date)).forEach(w=>{map[w.date]=map[w.date]||{date:w.date,works:0,faults:0,down:0};
+  map[w.date].works++;if(w.fault)map[w.date].faults++;map[w.date].down+=downtimeOf(w);});
+  return Object.values(map).sort((a,b)=>a.date<b.date?-1:1);}
+function energyTrend(){const map={};DB.energy.filter(e=>inRange(e.date)).forEach(e=>{map[e.date]=map[e.date]||{date:e.date,feed:0,energy:0};
+  map[e.date].feed+=(+e.feed||0);map[e.date].energy+=(+e.energy||0);});
+  return Object.values(map).map(x=>({date:x.date,unit:unitEnergy(x.energy,x.feed)})).sort((a,b)=>a.date<b.date?-1:1);}
+function equipReliability(){const days=Math.max(1,(new Date(RANGE.to)-new Date(RANGE.from))/86400000+1),opMin=days*24*60;
+  return DB.equip.map(e=>{const ws=DB.wos.filter(w=>w.equip===e.tag&&inRange(w.date));const faults=ws.filter(w=>w.fault);
+    const down=faults.reduce((s,w)=>s+downtimeOf(w),0),stops=faults.length;
+    return {tag:e.tag,name:e.name,crit:e.crit,stops,down,mttr:stops?Math.round(down/stops):0,
+      mtbf:stops?Math.round((opMin-down)/stops/60):'—',works:ws.length};
+  }).sort((a,b)=>b.stops-a.stops||b.down-a.down);}
+function topEquip(){const m={};DB.wos.filter(w=>inRange(w.date)&&w.fault).forEach(w=>{m[w.equip]=(m[w.equip]||0)+1;});
+  return Object.entries(m).map(([tag,c])=>({tag,faults:c})).sort((a,b)=>b.faults-a.faults).slice(0,10);}
+
+/* ============ Огнооны муж ============ */
+const iso=d=>d.toISOString().slice(0,10);
+function presetRange(p){const now=new Date();const to=iso(now);
+  if(p==='today')return{from:to,to};
+  if(p==='week'){const f=new Date(now);f.setDate(f.getDate()-6);return{from:iso(f),to};}
+  if(p==='year')return{from:now.getFullYear()+'-01-01',to};
+  return{from:to.slice(0,8)+'01',to};}
+let PRESET='custom',RANGE={from:'2026-06-01',to:'2026-06-30'};
+function setPreset(p){PRESET=p;RANGE=presetRange(p);syncDates();renderPresets();render();}
+function setCustom(){PRESET='custom';RANGE={from:document.getElementById('dFrom').value,to:document.getElementById('dTo').value};renderPresets();render();}
+function syncDates(){document.getElementById('dFrom').value=RANGE.from;document.getElementById('dTo').value=RANGE.to;}
+function renderPresets(){const ps=[['today','Өдөр'],['week','7 хоног'],['month','Сар'],['year','Он']];
+  document.getElementById('presets').innerHTML=ps.map(([k,l])=>`<button class="${PRESET===k?'on':''}" onclick="setPreset('${k}')">${l}</button>`).join('');}
+
+/* ============ Навигаци ============ */
+const BASE_PAGES=[
+  ['dash','Нүүр / Dashboard','📊'],['new','Шинэ мэдээ оруулах','➕'],
+  ['energy','Эрчим хүчний хэрэглээ','🔋'],['work','Ажлын түүх / Хайлт','📋'],
+  ['iso','Тусгаарлалт / PD','🔒'],['equip','Тоног төхөөрөмж','📦'],
+  ['reliab','Найдвартай ажиллагаа','📈'],['eng','Инженерийн гүйцэтгэл','👤'],
+  ['faults','Цахилгааны гэмтэл','⚡'],['ref','Лавлах / Тохиргоо','⚙️'],
+];
+function pages(){const p=[...BASE_PAGES];if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥']);return p;}
+let CUR='dash';
+function go(p){CUR=p;document.getElementById('side').classList.remove('open');renderNav();render();}
+function renderNav(){document.getElementById('nav').innerHTML=pages().map(([k,l,ic])=>
+  `<a class="${CUR===k?'active':''}" onclick="go('${k}')">${ic} ${l}</a>`).join('');
+  document.getElementById('title').textContent=(pages().find(p=>p[0]===CUR)||['','Нүүр'])[1];}
+
+/* ============ Render ============ */
+function render(){const v=document.getElementById('view');
+  if(CUR==='dash'){v.innerHTML=viewDash();drawCharts();}
+  else if(CUR==='new')v.innerHTML=viewNew();
+  else if(CUR==='energy'){v.innerHTML=viewEnergy();drawEnergyChart();}
+  else if(CUR==='work'){v.innerHTML=viewWork();renderWorkTable();}
+  else if(CUR==='iso'){v.innerHTML=viewIso();drawIsoCharts();}
+  else if(CUR==='equip')v.innerHTML=viewEquip();
+  else if(CUR==='reliab')v.innerHTML=viewReliab();
+  else if(CUR==='eng')v.innerHTML=viewEng();
+  else if(CUR==='faults')v.innerHTML=viewFaults();
+  else if(CUR==='ref')v.innerHTML=viewRef();
+  else if(CUR==='users'){v.innerHTML=viewUsers();loadUsers();}
+}
+function kpiCard(lbl,val,tone,sub){return `<div class="glass card kpi"><div class="lbl">${lbl}</div>
+  <div class="val t-${tone}">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;}
+function optList(arr,sel){return arr.map(x=>`<option ${x===sel?'selected':''}>${esc(x)}</option>`).join('');}
+function dataListEquip(){return `<datalist id="equipList">${DB.equip.map(e=>`<option value="${esc(e.tag)}">`).join('')}</datalist>`;}
+
+/* ---- Dashboard ---- */
+function viewDash(){const k=kpis();
+  return `<div class="grid kpis" style="margin-bottom:12px">
+    ${kpiCard('Нийт ажил',k.total,'accent')}${kpiCard('Хийгдсэн',k.done,'ok')}
+    ${kpiCard('Төлөвлөгөөт',k.planned,'teal')}${kpiCard('Төлөвлөгөөт бус',k.unplanned,'warn')}
+    ${kpiCard('Гэмтэл',k.faults,'danger')}${kpiCard('Тусгаарлалт',k.isoStd+k.isoGrp,'muted','Стандарт '+k.isoStd+' · Групп '+k.isoGrp)}</div>
+  <div class="grid kpis" style="margin-bottom:16px">
+    ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF (цаг)',k.mtbf,'accent')}
+    ${kpiCard('MTTR (мин)',k.mttr,'warn')}${kpiCard('Downtime (мин)',k.down,'danger')}
+    ${kpiCard('Ажилласан цаг',k.workHours,'teal','Хүн тоо × 12ц')}${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}</div>
+  <div class="grid col3" style="grid-template-columns:2fr 1fr;margin-bottom:16px">
+    <div class="glass card"><div class="section-title">📈 Өдрийн чиг хандлага — ажил &amp; гэмтэл</div><canvas id="cTrend" height="110"></canvas></div>
+    <div class="glass card"><div class="section-title">🔧 Ажлын төрөл тус бүрийн тоо</div><canvas id="cType" height="160"></canvas><div id="typeNums" style="margin-top:10px;font-size:13px"></div></div></div>
+  <div class="grid col2" style="margin-bottom:16px">
+    <div class="glass card"><div class="section-title">📊 Downtime чиг хандлага (мин)</div><canvas id="cDown" height="120"></canvas></div>
+    <div class="glass card"><div class="section-title">🏭 Top эвдрэлтэй төхөөрөмж</div><canvas id="cTop" height="120"></canvas></div></div>
+  <div class="glass card"><div class="section-title">🔋 Нэгж бүтээгдэхүүнд зарцуулсан эрчим хүч (кВт/цаг)</div><canvas id="cEnergy" height="90"></canvas></div>`;
+}
+let charts=[];
+function destroyCharts(){charts.forEach(c=>c.destroy());charts=[];}
+function baseOpts(extra={}){const tick='#8ea2c0',gridC='#243049';
+  return{responsive:true,plugins:{legend:{labels:{color:tick}}},
+    scales:{x:{ticks:{color:tick},grid:{color:gridC}},y:{ticks:{color:tick},grid:{color:gridC}}},...extra};}
+function drawCharts(){destroyCharts();const t=trend(),tc=workTypeCounts(),te=topEquip(),et=energyTrend();
+  charts.push(new Chart(cTrend,{type:'line',data:{labels:t.map(x=>x.date),
+    datasets:[{label:'Ажил',data:t.map(x=>x.works),borderColor:'#2e8bff',tension:.3},
+              {label:'Гэмтэл',data:t.map(x=>x.faults),borderColor:'#ff4d4f',tension:.3}]},options:baseOpts()}));
+  const palette=['#2e8bff','#ffb020','#1ec8c8','#2fd07a','#ff4d4f','#8ea2c0','#a78bfa','#f472b6'];
+  charts.push(new Chart(cType,{type:'bar',data:{labels:tc.map(x=>x[0]),
+    datasets:[{label:'Ажлын тоо',data:tc.map(x=>x[1]),backgroundColor:tc.map((_,i)=>palette[i%palette.length])}]},
+    options:baseOpts({indexAxis:'y',plugins:{legend:{display:false}}})}));
+  document.getElementById('typeNums').innerHTML=tc.map((x,i)=>
+    `<span class="badge b-muted" style="margin:2px 4px 2px 0;display:inline-block"><b style="color:${palette[i%palette.length]}">${x[1]}</b> · ${esc(x[0])}</span>`).join('')||'<span class="muted">Өгөгдөл алга</span>';
+  charts.push(new Chart(cDown,{type:'bar',data:{labels:t.map(x=>x.date),
+    datasets:[{label:'Downtime',data:t.map(x=>x.down),backgroundColor:'#ffb020'}]},options:baseOpts()}));
+  charts.push(new Chart(cTop,{type:'bar',data:{labels:te.map(x=>x.tag),
+    datasets:[{label:'Гэмтэл',data:te.map(x=>x.faults),backgroundColor:'#2e8bff'}]},options:baseOpts({indexAxis:'y'})}));
+  charts.push(new Chart(cEnergy,{type:'line',data:{labels:et.map(x=>x.date),
+    datasets:[{label:'кВт/цаг (нэгж бүт.)',data:et.map(x=>x.unit),borderColor:'#1ec8c8',backgroundColor:'rgba(30,200,200,.15)',fill:true,tension:.3}]},options:baseOpts()}));
+}
+
+/* ---- Шинэ мэдээ ---- */
+function viewNew(){return `${dataListEquip()}<form onsubmit="saveReport(event)" style="max-width:900px">
+  <div class="glass card" style="margin-bottom:16px">
+    <div class="section-title">🗓️ Ерөнхий мэдээлэл <span class="badge b-accent" style="margin-left:auto">Авто дугаар + timestamp</span></div>
+    <div class="col3">
+      <label class="field"><span>Огноо *</span><input type="date" id="f_date" required value="${iso(new Date())}"></label>
+      <label class="field"><span>Ээлж *</span><select id="f_shift" required><option value="">—</option>${optList(['А','Б','В','Г'])}</select></label>
+      <label class="field"><span>Өдөр / Шөнө *</span><select id="f_dn">${optList(SHIFT_DN)}</select></label>
+      <label class="field"><span>Хүн тоо</span><input type="number" id="f_head" value="1" min="0"></label>
+      <label class="field"><span>Ажилласан шугам</span><input type="number" id="f_lines" value="2" min="0"></label><div></div>
+    </div></div>
+  <div class="glass card" style="margin-bottom:16px">
+    <div class="section-title">🔧 Хийсэн ажил / Ажлын тайлан</div>
+    <div class="col3">
+      <label class="field"><span>Төхөөрөмж / Tag</span><input id="w_equip" list="equipList" placeholder="Сонгох эсвэл бичих"></label>
+      <label class="field"><span>Байршил</span><select id="w_area"><option value="">—</option>${optList(DB.areas)}</select></label>
+      <label class="field"><span>Ажлын төрөл *</span><select id="w_type" required><option value="">—</option>${optList(DB.types)}</select></label>
+      <label class="field"><span>Priority *</span><select id="w_prio" required><option value="">—</option>${optList(PRIOS)}</select></label>
+      <label class="field"><span>Статус *</span><select id="w_status" required><option value="">—</option>${optList(STATUSES)}</select></label>
+      <label class="field"><span>Хариуцагч инженер</span><select id="w_eng"><option value="">—</option>${optList(DB.engineers)}</select></label>
+      <label class="field" style="grid-column:span 3"><span>Ажлын тайлбар *</span><textarea id="w_desc" rows="2" required></textarea></label>
+      <label class="field"><span>Эвдрэл эсэх</span><div><label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="w_fault" style="width:auto" onchange="document.getElementById('faultBox').classList.toggle('hidden',!this.checked)"> Тийм, энэ нь эвдрэл</label></div></label>
+      <label class="field"><span>Start time</span><input type="datetime-local" id="w_start" onchange="calcDown()"></label>
+      <label class="field"><span>Finish time</span><input type="datetime-local" id="w_finish" onchange="calcDown()"></label>
+      <div id="faultBox" class="hidden row2" style="grid-column:span 3">
+        <label class="field"><span>Root Cause</span><input id="w_root"></label>
+        <label class="field"><span>Action Taken</span><input id="w_action"></label></div>
+    </div>
+    <div class="note" style="margin-top:12px">Авто тооцоо: Downtime = <b id="downPrev">— (Start/Finish оруулна уу)</b></div>
+  </div>
+  <button class="btn">Хадгалах</button></form>`;}
+function calcDown(){const s=val('w_start'),f=val('w_finish');let txt='— (Start/Finish оруулна уу)';
+  if(s&&f){let m=Math.max(0,Math.round((new Date(f)-new Date(s))/60000));txt=m+' мин';}document.getElementById('downPrev').textContent=txt;}
+function val(id){return document.getElementById(id).value;}
+function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
+  const no='DR-'+val('f_date').replaceAll('-','')+'-'+val('f_shift')+'-'+(val('f_dn')==='Өдөр'?'D':'N');
+  DB.reports.push({id:rid,no,date:val('f_date'),shift:val('f_shift'),dn:val('f_dn'),head:+val('f_head'),lines:+val('f_lines'),notes:''});
+  if(val('w_desc').trim()){const s=val('w_start'),f=val('w_finish');
+    DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:rid,date:val('f_date'),
+      equip:val('w_equip'),area:val('w_area'),type:val('w_type'),prio:val('w_prio'),status:val('w_status'),
+      desc:val('w_desc'),fault:document.getElementById('w_fault').checked,root:val('w_root'),action:val('w_action'),
+      start:s,finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng')});}
+  save();toast('Хадгалагдлаа ✓ ('+no+')');go('dash');}
+
+/* ---- Эрчим хүч ---- */
+function viewEnergy(){const ens=DB.energy.filter(e=>inRange(e.date)).sort((a,b)=>a.date<b.date?1:-1);
+  const byDate={};ens.forEach(e=>{(byDate[e.date]=byDate[e.date]||[]).push(e);});let rows='';
+  Object.keys(byDate).sort((a,b)=>a<b?1:-1).forEach(d=>{const arr=byDate[d];let tf=0,te=0;
+    arr.forEach(e=>{tf+=+e.feed||0;te+=+e.energy||0;
+      rows+=`<tr><td>${e.date}</td><td>${esc(e.shift)}</td><td>${num(e.feed)} мян/тн</td><td>${num(e.energy)} кВт/цаг</td>
+        <td class="t-accent">${unitEnergy(e.energy,e.feed)}</td><td>${esc(e.tezu)||'—'}</td><td><button class="del" onclick="delEnergy(${e.id})">✕</button></td></tr>`;});
+    rows+=`<tr class="tot"><td>${d}</td><td>Нийт</td><td>${num(tf)} мян/тн</td><td>${num(te)} кВт/цаг</td><td>${unitEnergy(te,tf)}</td><td>—</td><td></td></tr>`;});
+  const k=kpis();
+  return `<div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+    ${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}${kpiCard('Нийт авсан тэжээл',num(k.totFeed),'teal','мян/тн')}
+    ${kpiCard('Нийт эрчим хүч',num(k.totEn),'warn','кВт/цаг')}${kpiCard('Бүртгэлийн тоо',ens.length,'ok')}</div>
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title">🔋 Нэгж бүтээгдэхүүнд зарцуулсан эрчим хүч (кВт/цаг)</div><canvas id="cE2" height="80"></canvas></div>
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Эрчим хүчний хэрэглээ бүртгэх</div>
+    <form onsubmit="addEnergy(event)"><div class="col3">
+      <label class="field"><span>Огноо *</span><input type="date" id="en_date" required value="${iso(new Date())}"></label>
+      <label class="field"><span>Ээлж *</span><select id="en_shift" required>${optList(SHIFT_DN)}</select></label>
+      <label class="field"><span>Авсан тэжээл (мян/тн) *</span><input type="number" step="0.01" id="en_feed" required oninput="calcUnit()"></label>
+      <label class="field"><span>Эрчим хүчний хэрэглээ (кВт/цаг) *</span><input type="number" step="0.01" id="en_energy" required oninput="calcUnit()"></label>
+      <label class="field"><span>Нэгж бүт. эрчим хүч (авто)</span><input id="en_unit" readonly placeholder="—" style="opacity:.8"></label>
+      <label class="field"><span>Тэзү утга</span><input id="en_tezu" placeholder="(заавал биш)"></label>
+    </div><div style="margin-top:12px"><button class="btn">Бүртгэх</button>
+      <span class="muted" style="font-size:12px;margin-left:10px">Нэгж бүт. = Эрчим хүч ÷ Тэжээл (авто)</span></div></form></div>
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>Огноо</th><th>Ээлж</th><th>Авсан тэжээл</th><th>Эрчим хүчний хэрэглээ</th><th>Нэгж бүт. кВт/цаг</th><th>Тэзү</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
+function drawEnergyChart(){const et=energyTrend();if(window._eC)window._eC.destroy();
+  window._eC=new Chart(cE2,{type:'line',data:{labels:et.map(x=>x.date),
+    datasets:[{label:'кВт/цаг (нэгж бүт.)',data:et.map(x=>x.unit),borderColor:'#1ec8c8',backgroundColor:'rgba(30,200,200,.15)',fill:true,tension:.3}]},options:baseOpts()});}
+function calcUnit(){const f=+val('en_feed'),e=+val('en_energy');document.getElementById('en_unit').value=f>0?unitEnergy(e,f):'';}
+function addEnergy(ev){ev.preventDefault();DB.energy.push({id:++DB.seq.energy,date:val('en_date'),shift:val('en_shift'),feed:+val('en_feed'),energy:+val('en_energy'),tezu:val('en_tezu')});
+  save();toast('Эрчим хүчний бүртгэл нэмэгдлээ ✓');render();}
+function delEnergy(id){if(!confirm('Энэ бүртгэлийг устгах уу?'))return;DB.energy=DB.energy.filter(e=>e.id!==id);save();render();}
+
+/* ---- Ажлын түүх ---- */
+function badgeFor(s){return{'Дууссан':'b-ok','Нээлттэй':'b-accent','Хийгдэж буй':'b-warn','Цуцлагдсан':'b-muted'}[s]||'b-muted';}
+function viewWork(){return `<div class="glass card" style="margin-bottom:16px;display:flex;gap:10px;align-items:center">
+    🔍 <input id="q" placeholder="Tag, төхөөрөмж, инженер, байршил, WO дугаараар хайх…" oninput="renderWorkTable()"></div>
+  <div class="glass card" style="padding:0;overflow:auto"><table id="wtable"></table></div>`;}
+function renderWorkTable(){const q=(document.getElementById('q')?.value||'').toLowerCase();
+  let rows=DB.wos.filter(w=>inRange(w.date));
+  if(q)rows=DB.wos.filter(w=>[w.no,w.equip,w.area,w.eng,w.desc].join(' ').toLowerCase().includes(q));
+  rows.sort((a,b)=>a.date<b.date?1:-1);
+  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус</th><th>Огноо</th></tr></thead>
+    <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td>
+      <td>${esc(w.equip)||'—'}</td><td style="max-width:280px">${esc(w.desc)}</td><td class="muted">${esc(w.area)||'—'}</td>
+      <td>${esc(w.eng)||'—'}</td><td><span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span></td>
+      <td class="muted" style="font-size:12px">${w.date}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
+
+/* ---- Тусгаарлалт ---- */
+function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1);
+  const std=isos.filter(i=>i.type==='Стандарт').length,grp=isos.filter(i=>i.type==='Групп').length;
+  const active=isos.filter(i=>isoStatus(i)==='Тусгаарласан').length,restored=isos.filter(i=>isoStatus(i)==='Сэргээсэн').length,handed=isos.filter(i=>isoStatus(i)==='Шилжүүлсэн').length;
+  return `${dataListEquip()}
+  <div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px">
+    ${kpiCard('Нийт тусгаарлалт',isos.length,'accent')}${kpiCard('Стандарт',std,'teal')}${kpiCard('Групп',grp,'warn')}
+    ${kpiCard('Тусгаарласан',active,'danger')}${kpiCard('Сэргээсэн (авсан)',restored,'ok')}${kpiCard('Шилжүүлсэн',handed,'muted','шөнө→өдөр г.м')}</div>
+  <div class="grid col2" style="margin-bottom:16px">
+    <div class="glass card"><div class="section-title">🔒 Тусгаарлалт төрлөөр</div><canvas id="iPie" height="150"></canvas></div>
+    <div class="glass card"><div class="section-title">📊 Төлөвөөр</div><canvas id="iBar" height="150"></canvas></div></div>
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Тусгаарлалт бүртгэх</div>
+    <form onsubmit="addIso(event)"><div class="col3">
+      <label class="field"><span>Огноо *</span><input type="date" id="i_date" required value="${iso(new Date())}"></label>
+      <label class="field"><span>Ээлж *</span><select id="i_shift" required>${optList(SHIFT_DN)}</select></label>
+      <label class="field"><span>Төрөл *</span><select id="i_type" required>${optList(ISO_TYPES)}</select></label>
+      <label class="field"><span>Төхөөрөмж / Tag *</span><input id="i_equip" list="equipList" required placeholder="PP3284 ..."></label>
+      <label class="field"><span>Төлөв *</span><select id="i_status" required>${optList(ISO_STATUS)}</select></label>
+      <label class="field"><span>PD дугаар</span><input id="i_pd" placeholder="PD-..."></label>
+      <label class="field"><span>Хийсэн хүн</span><select id="i_by"><option value="">—</option>${optList(DB.isoPersons)}</select></label>
+      <label class="field" style="grid-column:span 2"><span>Тэмдэглэл</span><input id="i_note"></label>
+    </div><div style="margin-top:12px"><button class="btn">Бүртгэх</button></div></form></div>
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>Огноо</th><th>Ээлж</th><th>Төрөл</th><th>Төхөөрөмж</th><th>Төлөв</th><th>PD №</th><th>Хийсэн хүн</th><th>Тэмдэглэл</th><th></th></tr></thead>
+    <tbody>${isos.map(i=>{const st=isoStatus(i);const sb={'Тусгаарласан':'b-danger','Сэргээсэн':'b-ok','Шилжүүлсэн':'b-muted'}[st]||'b-muted';
+      return `<tr><td>${i.date}</td><td>${esc(isoShift(i))}</td><td><span class="badge ${i.type==='Групп'?'b-warn':'b-teal'}">${esc(i.type)}</span></td>
+      <td class="t-accent" style="font-family:monospace">${esc(i.equip)}</td><td><span class="badge ${sb}">${esc(st)}</span></td>
+      <td class="muted">${esc(isoPD(i))||'—'}</td><td>${esc(i.by)||'—'}</td><td class="muted" style="max-width:200px">${esc(i.note)||'—'}</td>
+      <td><button class="del" onclick="delIso(${i.id})">✕</button></td></tr>`;}).join('')||'<tr><td colspan="9" style="text-align:center;padding:32px" class="muted">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
+let isoCharts=[];
+function drawIsoCharts(){isoCharts.forEach(c=>c.destroy());isoCharts=[];const isos=DB.isolations.filter(i=>inRange(i.date));
+  const std=isos.filter(i=>i.type==='Стандарт').length,grp=isos.filter(i=>i.type==='Групп').length;
+  const sc=ISO_STATUS.map(s=>isos.filter(i=>isoStatus(i)===s).length);
+  isoCharts.push(new Chart(iPie,{type:'doughnut',data:{labels:['Стандарт','Групп'],datasets:[{data:[std,grp],backgroundColor:['#1ec8c8','#ffb020']}]},options:{responsive:true,plugins:{legend:{labels:{color:'#8ea2c0'}}}}}));
+  isoCharts.push(new Chart(iBar,{type:'bar',data:{labels:ISO_STATUS,datasets:[{label:'Тоо',data:sc,backgroundColor:['#ff4d4f','#2fd07a','#8ea2c0']}]},options:baseOpts({plugins:{legend:{display:false}}})}));}
+function addIso(e){e.preventDefault();DB.isolations.push({id:++DB.seq.iso,date:val('i_date'),shift:val('i_shift'),type:val('i_type'),
+    equip:val('i_equip'),status:val('i_status'),pd:val('i_pd'),by:val('i_by'),note:val('i_note')});save();toast('Тусгаарлалт бүртгэгдлээ ✓');render();}
+function delIso(id){if(!confirm('Устгах уу?'))return;DB.isolations=DB.isolations.filter(i=>i.id!==id);save();render();}
+
+/* ---- Тоног төхөөрөмж ---- */
+function viewEquip(){return `<div class="glass card" style="margin-bottom:16px">
+    <div class="section-title">➕ Шинэ тоног төхөөрөмж нэмэх <span class="badge b-ok" style="margin-left:auto">Серверт хадгалагдана</span></div>
+    <form onsubmit="addEquip(event)"><div class="col3">
+      <label class="field"><span>TAG дугаар *</span><input id="e_tag" required placeholder="ж: PP4100"></label>
+      <label class="field"><span>Нэр *</span><input id="e_name" required placeholder="ж: PP4100 хөдөлгүүр"></label>
+      <label class="field"><span>Ангилал</span><input id="e_cat" placeholder="Хөдөлгүүр / Насос ..."></label>
+      <label class="field"><span>Байршил</span><select id="e_area"><option value="">—</option>${optList(DB.areas)}</select></label>
+      <label class="field"><span>Эгзэгтэй байдал</span><select id="e_crit">${optList(['Бага','Дунд','Өндөр','Эгзэгтэй'],'Дунд')}</select></label>
+      <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form></div>
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>TAG</th><th>Нэр</th><th>Байршил</th><th>Ангилал</th><th>Эгзэгтэй байдал</th><th>Гэмтэл</th><th></th></tr></thead>
+    <tbody>${DB.equip.map(e=>{const f=DB.wos.filter(w=>w.equip===e.tag&&w.fault&&inRange(w.date)).length;
+      const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
+      return `<tr><td class="t-accent" style="font-family:monospace">${esc(e.tag)}</td><td>${esc(e.name)}</td><td class="muted">${esc(e.area)||'—'}</td>
+      <td>${esc(e.cat)||'—'}</td><td><span class="badge ${tb}">${esc(e.crit)}</span></td><td>${f}</td>
+      <td><button class="del" onclick="delEquip('${esc(e.tag)}')">✕</button></td></tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж алга.</td></tr>'}</tbody></table></div>`;}
+function addEquip(e){e.preventDefault();const tag=val('e_tag').trim();
+  if(DB.equip.some(x=>x.tag===tag)){toast('Энэ TAG бүртгэлтэй');return;}
+  DB.equip.push({tag,name:val('e_name').trim(),cat:val('e_cat').trim(),area:val('e_area'),crit:val('e_crit')});save();toast('Нэмэгдэж хадгалагдлаа ✓');render();}
+function delEquip(tag){if(!confirm(tag+' -ийг устгах уу?'))return;DB.equip=DB.equip.filter(e=>e.tag!==tag);save();render();}
+
+/* ---- Найдвартай ажиллагаа ---- */
+function viewReliab(){const r=equipReliability();
+  return `<div class="note" style="margin-bottom:16px">Тоноглол бүрийн зогсолт, downtime, MTBF, MTTR-ийг бүртгэсэн гэмтэл/ажлаас <b>автоматаар</b> тооцоолно. Огнооны шүүлтүүрээр (сар/жил) хугацааг өөрчилнө.</div>
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>TAG (асет)</th><th>Нэр</th><th>Зогсолтын тоо</th><th>Нийт downtime (мин)</th><th>MTTR (мин)</th><th>MTBF (цаг)</th><th>Нийт ажил</th></tr></thead>
+    <tbody>${r.map(x=>`<tr><td class="t-accent" style="font-family:monospace">${esc(x.tag)}</td><td>${esc(x.name)}</td>
+      <td><b class="${x.stops?'t-danger':'t-muted'}">${x.stops}</b></td><td class="t-warn">${x.down}</td><td>${x.mttr}</td>
+      <td class="t-accent">${x.mtbf}</td><td class="muted">${x.works}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж алга.</td></tr>'}</tbody></table></div>`;}
+
+/* ---- Инженер ---- */
+function viewEng(){const m={};DB.wos.filter(w=>inRange(w.date)&&w.eng).forEach(w=>{m[w.eng]=m[w.eng]||{works:0,done:0,down:0};
+  m[w.eng].works++;if(isClosed(w.status))m[w.eng].done++;m[w.eng].down+=downtimeOf(w);});
+  const rows=Object.entries(m).sort((a,b)=>b[1].works-a[1].works);
+  return `<div class="note" style="margin-bottom:16px">Хариуцсан инженерийн жагсаалтыг "Лавлах / Тохиргоо" цэснээс нэмж, хасна.</div>
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>Инженер</th><th>Нийт ажил</th><th>Дууссан</th><th>Downtime (мин)</th></tr></thead>
+    <tbody>${rows.map(([n,d])=>`<tr><td>${esc(n)}</td><td>${d.works}</td><td class="t-ok">${d.done}</td><td class="t-warn">${d.down}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:32px" class="muted">Өгөгдөл алга.</td></tr>'}</tbody></table></div>`;}
+
+/* ---- Гэмтэл ---- */
+function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1);
+  return `<div class="note" style="margin-bottom:16px">Гэмтлийг "Шинэ мэдээ оруулах" дээр <b>"Эвдрэл эсэх ☑"</b> тэмдэглэхэд бүртгэгдэнэ.
+    <button class="btn btn-sm" style="margin-left:10px" onclick="go('new')">➕ Гэмтэл бүртгэх</button></div>
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>Priority</th><th>Root Cause</th><th>Action Taken</th><th>Downtime</th><th>Статус</th></tr></thead>
+    <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td><td>${esc(w.equip)}</td>
+      <td style="max-width:240px">${esc(w.desc)}</td><td><span class="badge ${w.prio==='Эгзэгтэй'?'b-danger':w.prio==='Өндөр'?'b-warn':'b-accent'}">${esc(w.prio)}</span></td>
+      <td class="muted">${esc(w.root)||'—'}</td><td class="muted">${esc(w.action)||'—'}</td><td>${downtimeOf(w)} мин</td>
+      <td><span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span></td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Гэмтэл алга.</td></tr>'}</tbody></table></div>`;}
+
+/* ---- Лавлах ---- */
+function refBlock(title,kind,arr){return `<div class="glass card"><div class="section-title">${title}</div>
+    <div class="addbar"><input id="add_${kind}" placeholder="Шинээр нэмэх..."><button class="btn btn-sm" onclick="addRef('${kind}')">Нэмэх</button></div>
+    <div class="chips">${arr.map((x,idx)=>`<span class="chip">${esc(x)}<button class="del" onclick="delRef('${kind}',${idx})">✕</button></span>`).join('')||'<span class="muted" style="font-size:13px">Хоосон</span>'}</div></div>`;}
+function viewRef(){return `<div class="grid col2" style="margin-bottom:12px">
+    ${refBlock('📍 Байршил','areas',DB.areas)}${refBlock('🔧 Ажлын төрөл','types',DB.types)}
+    ${refBlock('👤 Хариуцсан инженер','engineers',DB.engineers)}${refBlock('🔒 Тусгаарлалт хийсэн хүн','isoPersons',DB.isoPersons)}</div>
+  <div class="note">Эдгээр жагсаалт нь формуудын сонголтод шууд тусна.</div>`;}
+function addRef(kind){const inp=document.getElementById('add_'+kind);const v=inp.value.trim();
+  if(!v)return;if(DB[kind].includes(v)){toast('Аль хэдийн бий');return;}DB[kind].push(v);save();render();toast('Нэмэгдлээ ✓');}
+function delRef(kind,idx){DB[kind].splice(idx,1);save();render();}
+
+/* ---- ХЭРЭГЛЭГЧИД (Админ) ---- */
+function viewUsers(){return `<div class="glass card" style="margin-bottom:16px">
+    <div class="section-title">➕ Шинэ хэрэглэгч нэмэх</div>
+    <form onsubmit="addUser(event)"><div class="col3">
+      <label class="field"><span>Нэвтрэх нэр *</span><input id="u_username" required placeholder="ж: bat"></label>
+      <label class="field"><span>Овог нэр *</span><input id="u_name" required placeholder="ж: Бат-Эрдэнэ"></label>
+      <label class="field"><span>Нууц үг *</span><input id="u_pw" required placeholder="нууц үг"></label>
+      <label class="field"><span>Эрх</span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
+      <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form>
+    <div class="note" style="margin-top:12px">Эрх: <b>Админ</b>=бүх эрх+хэрэглэгч удирдах · <b>Ахлах/Инженер/Техникч</b>=бүртгэх, засах · <b>Үзэгч</b>=зөвхөн харах.</div></div>
+  <div class="glass card" style="padding:0;overflow:auto"><table id="userTable"><tbody><tr><td class="muted" style="padding:20px">Уншиж байна…</td></tr></tbody></table></div>`;}
+async function loadUsers(){try{const us=await api('/api/users',{headers:authHdr()});
+  document.getElementById('userTable').innerHTML=`<thead><tr><th>Нэвтрэх нэр</th><th>Овог нэр</th><th>Эрх</th><th></th></tr></thead>
+    <tbody>${us.map(u=>`<tr><td style="font-family:monospace">${esc(u.username)}</td><td>${esc(u.name)}</td>
+      <td><span class="badge ${u.role==='ADMIN'?'b-danger':u.role==='VIEWER'?'b-muted':'b-accent'}">${roleLabel(u.role)}</span></td>
+      <td>${u.id===ME.id?'<span class="muted" style="font-size:12px">(та)</span>':`<button class="del" onclick="delUser(${u.id},'${esc(u.username)}')">✕</button>`}</td></tr>`).join('')}</tbody>`;
+  }catch(e){toast(e.message);}}
+async function addUser(e){e.preventDefault();
+  try{await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify({
+      username:val('u_username').trim(),name:val('u_name').trim(),password:val('u_pw'),role:val('u_role')})});
+    toast('Хэрэглэгч нэмэгдлээ ✓');render();}catch(err){toast(err.message);}}
+async function delUser(id,name){if(!confirm(name+' хэрэглэгчийг устгах уу?'))return;
+  try{await api('/api/users/'+id,{method:'DELETE',headers:authHdr()});toast('Устгагдлаа');render();}catch(err){toast(err.message);}}
+
+function toast(msg){const t=document.createElement('div');t.className='glass toast';t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
+
+/* ============ Auth / эхлүүлэх ============ */
+async function doLogin(e){e.preventDefault();
+  try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:val('lu'),password:val('lp')})});
+    const d=await r.json();if(!r.ok){toast(d.error||'Алдаа');return;}
+    TOKEN=d.token;ME=d.user;localStorage.setItem('tk',TOKEN);await apiLoad();startApp();
+  }catch(err){toast('Холболтын алдаа — сервер ажиллаж байгаа эсэхийг шалгана уу');}}
+function logout(){localStorage.removeItem('tk');TOKEN=null;ME=null;location.reload();}
+function startApp(){document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('who').textContent=ME.name;document.getElementById('whoRole').textContent=roleLabel(ME.role);
+  renderNav();renderPresets();syncDates();render();}
+async function init(){if(!TOKEN)return;
+  try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
+  catch{localStorage.removeItem('tk');TOKEN=null;}}
+init();
+</script>
+</body>
+</html>
