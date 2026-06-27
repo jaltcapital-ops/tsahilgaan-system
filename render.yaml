@@ -1,18 +1,10 @@
-# Render.com Blueprint — нэг товчоор тохируулга хийнэ.
-# Дата хадгалагдаж үлдэхийн тулд disk (1GB) залгасан байгаа.
 services:
   - type: web
     name: tsahilgaan-system
     runtime: node
-    plan: starter            # disk-тэй (дата хадгална). Free бол disk байхгүй — restart хийхэд дата устана.
+    plan: free
     buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: SECRET
-        generateValue: true  # автоматаар нууц түлхүүр үүсгэнэ
-      - key: DATA_FILE
-        value: /data/data.json
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
+        generateValue: true
