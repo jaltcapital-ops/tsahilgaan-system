@@ -258,7 +258,8 @@ function render(){const v=document.getElementById('view');
 function kpiCard(lbl,val,tone,sub){return `<div class="glass card kpi"><div class="lbl">${lbl}</div>
   <div class="val t-${tone}">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;}
 function optList(arr,sel){return arr.map(x=>`<option ${x===sel?'selected':''}>${esc(x)}</option>`).join('');}
-function dataListEquip(){return `<datalist id="equipList">${DB.equip.map(e=>`<option value="${esc(e.tag)}">`).join('')}</datalist>`;}
+function dataListEquip(){return `<datalist id="equipList">${DB.equip.map(e=>`<option value="${esc(e.tag)}">${esc(e.name||'')}`).join('')}</datalist>`;}
+function dataListPd(){return `<datalist id="pdList">${(DB.pdList||[]).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;}
 
 /* ---- Dashboard ---- */
 function viewDash(){const k=kpis();
@@ -302,7 +303,7 @@ function drawCharts(){destroyCharts();const t=trend(),tc=workTypeCounts(),te=top
 }
 
 /* ---- Шинэ мэдээ ---- */
-function viewNew(){return `${dataListEquip()}<form onsubmit="saveReport(event)" style="max-width:900px">
+function viewNew(){return `${dataListEquip()}${dataListPd()}<form onsubmit="saveReport(event)" style="max-width:900px">
   <div class="glass card" style="margin-bottom:16px">
     <div class="section-title">🗓️ Ерөнхий мэдээлэл <span class="badge b-accent" style="margin-left:auto">Авто дугаар + timestamp</span></div>
     <div class="col3">
@@ -315,7 +316,8 @@ function viewNew(){return `${dataListEquip()}<form onsubmit="saveReport(event)" 
   <div class="glass card" style="margin-bottom:16px">
     <div class="section-title">🔧 Хийсэн ажил / Ажлын тайлан</div>
     <div class="col3">
-      <label class="field"><span>Төхөөрөмж / Tag</span><input id="w_equip" list="equipList" placeholder="Сонгох эсвэл бичих"></label>
+      <label class="field"><span>Тоног төхөөрөмж / TAG (Position No)</span><input id="w_equip" list="equipList" placeholder="ж: MG-101 (бичихэд санал гарна)"></label>
+      <label class="field"><span>PD дугаар</span><input id="w_pd" list="pdList" placeholder="ж: 31PD-01 (бичихэд санал гарна)"></label>
       <label class="field"><span>Байршил</span><select id="w_area"><option value="">—</option>${optList(DB.areas)}</select></label>
       <label class="field"><span>Ажлын төрөл *</span><select id="w_type" required><option value="">—</option>${optList(DB.types)}</select></label>
       <label class="field"><span>Priority *</span><select id="w_prio" required><option value="">—</option>${optList(PRIOS)}</select></label>
@@ -341,7 +343,7 @@ function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
   if(val('w_desc').trim()){const s=val('w_start'),f=val('w_finish');const isFault=document.getElementById('w_fault').checked;
     const prio=val('w_prio'),equip=val('w_equip'),desc=val('w_desc');
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:rid,date:val('f_date'),
-      equip,area:val('w_area'),type:val('w_type'),prio,status:val('w_status'),
+      equip,pd:val('w_pd'),area:val('w_area'),type:val('w_type'),prio,status:val('w_status'),
       desc,fault:isFault,root:val('w_root'),action:val('w_action'),
       start:s,finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng')});
     if(isFault&&(prio==='Эгзэгтэй'||prio==='Өндөр')){
@@ -403,13 +405,13 @@ function woStatusCell(w){
   return `<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`;}
 function setWoStatus(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.status=val;save();toast('Статус шинэчлэгдлээ ✓');renderWorkTable();}
 function renderWorkTable(){const rows=currentWorkRows();const hint=canEditWoStatus()?'':' <span style="font-weight:400;text-transform:none;color:var(--muted)">(зөвхөн Админ/Мастер засна)</span>';
-  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус${hint}</th><th>Огноо</th></tr></thead>
+  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>TAG</th><th>PD</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус${hint}</th><th>Огноо</th></tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td>
-      <td>${esc(w.equip)||'—'}</td><td style="max-width:280px">${esc(w.desc)}</td><td class="muted">${esc(w.area)||'—'}</td>
+      <td>${esc(w.equip)||'—'}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(w.pd)||'—'}</td><td style="max-width:260px">${esc(w.desc)}</td><td class="muted">${esc(w.area)||'—'}</td>
       <td>${esc(w.eng)||'—'}</td><td>${woStatusCell(w)}</td>
-      <td class="muted" style="font-size:12px">${w.date}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
-function exportWork(){const rows=[['WO','Tag','Тайлбар','Байршил','Төрөл','Priority','Инженер','Статус','Downtime(мин)','Огноо']];
-  currentWorkRows().forEach(w=>rows.push([w.no,w.equip,w.desc,w.area,w.type,w.prio,w.eng,w.status,downtimeOf(w),w.date]));
+      <td class="muted" style="font-size:12px">${w.date}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
+function exportWork(){const rows=[['WO','TAG','PD','Тайлбар','Байршил','Төрөл','Priority','Инженер','Статус','Downtime(мин)','Огноо']];
+  currentWorkRows().forEach(w=>rows.push([w.no,w.equip,w.pd||'',w.desc,w.area,w.type,w.prio,w.eng,w.status,downtimeOf(w),w.date]));
   downloadCSV('Ajliin-tuuh_'+RANGE.from+'_'+RANGE.to,rows);}
 
 /* ---- Тусгаарлалт ---- */
@@ -417,7 +419,7 @@ function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b
   const std=isos.filter(i=>i.type==='Стандарт').length,grp=isos.filter(i=>i.type==='Групп').length;
   const active=isos.filter(i=>isoStatus(i)==='Тусгаарласан').length,restored=isos.filter(i=>isoStatus(i)==='Сэргээсэн').length,handed=isos.filter(i=>isoStatus(i)==='Шилжүүлсэн').length;
   const isoHint=canEditIsoStatus()?'':' <span style="font-weight:400;text-transform:none;color:var(--muted)">(зөвхөн Тусгаарлалтын техникч засна)</span>';
-  return `${dataListEquip()}
+  return `${dataListEquip()}${dataListPd()}
   <div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px">
     ${kpiCard('Нийт тусгаарлалт',isos.length,'accent')}${kpiCard('Стандарт',std,'teal')}${kpiCard('Групп',grp,'warn')}
     ${kpiCard('Тусгаарласан',active,'danger')}${kpiCard('Сэргээсэн (авсан)',restored,'ok')}${kpiCard('Шилжүүлсэн',handed,'muted','шөнө→өдөр г.м')}</div>
@@ -431,7 +433,7 @@ function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b
       <label class="field"><span>Төрөл *</span><select id="i_type" required>${optList(ISO_TYPES)}</select></label>
       <label class="field"><span>Төхөөрөмж / Tag *</span><input id="i_equip" list="equipList" required placeholder="PP3284 ..."></label>
       <label class="field"><span>Төлөв *</span><select id="i_status" required>${optList(ISO_STATUS)}</select></label>
-      <label class="field"><span>PD дугаар</span><input id="i_pd" placeholder="PD-..."></label>
+      <label class="field"><span>PD дугаар</span><input id="i_pd" list="pdList" placeholder="ж: 31PD-01"></label>
       <label class="field"><span>Хийсэн хүн</span><select id="i_by"><option value="">—</option>${optList(DB.isoPersons)}</select></label>
       <label class="field" style="grid-column:span 2"><span>Тэмдэглэл</span><input id="i_note"></label>
     </div><div style="margin-top:12px"><button class="btn">Бүртгэх</button></div></form></div>
@@ -461,29 +463,39 @@ function isoStatusCell(i){const st=isoStatus(i);const sb={'Тусгаарлас�
 function setIsoStatus(id,val){const i=DB.isolations.find(x=>x.id===id);if(!i)return;i.status=val;save();toast('Тусгаарлалтын төлөв шинэчлэгдлээ ✓');render();}
 
 /* ---- Тоног төхөөрөмж ---- */
-function viewEquip(){return `<div class="glass card" style="margin-bottom:16px">
+function eqFiltered(){const q=(window._eq||'').toLowerCase();
+  return q?DB.equip.filter(e=>[e.tag,e.name,e.pd,e.area,e.cat].join(' ').toLowerCase().includes(q)):DB.equip;}
+function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
+  return `<div class="muted" style="font-size:12px;margin-bottom:8px">${list.length} тоног төхөөрөмж${list.length>300?' (эхний 300 харуулж байна, хайлт нарийсгана уу)':''}</div>
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>TAG</th><th>Нэр</th><th>PD</th><th>Байршил</th><th>Ангилал</th><th>Эгзэгтэй</th><th>Гэмтэл</th><th></th></tr></thead>
+    <tbody>${shown.map(e=>{const f=DB.wos.filter(w=>w.equip===e.tag&&w.fault&&inRange(w.date)).length;
+      const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
+      return `<tr><td class="t-accent" style="font-family:monospace">${esc(e.tag)}</td><td>${esc(e.name)}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(e.pd)||'—'}</td><td class="muted">${esc(e.area)||'—'}</td>
+      <td>${esc(e.cat)||'—'}</td><td><span class="badge ${tb}">${esc(e.crit)}</span></td><td>${f}</td>
+      <td><button class="del" onclick="delEquip('${esc(e.tag)}')">✕</button></td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж олдсонгүй.</td></tr>'}</tbody></table></div>`;}
+function refreshEq(v){window._eq=v;document.getElementById('eqResults').innerHTML=eqResultsHTML();}
+function viewEquip(){
+  return `${dataListPd()}<div class="glass card" style="margin-bottom:16px">
     <div class="section-title">➕ Шинэ тоног төхөөрөмж нэмэх <span class="badge b-ok" style="margin-left:auto">Серверт хадгалагдана</span></div>
     <form onsubmit="addEquip(event)"><div class="col3">
-      <label class="field"><span>TAG дугаар *</span><input id="e_tag" required placeholder="ж: PP4100"></label>
-      <label class="field"><span>Нэр *</span><input id="e_name" required placeholder="ж: PP4100 хөдөлгүүр"></label>
-      <label class="field"><span>Ангилал</span><input id="e_cat" placeholder="Хөдөлгүүр / Насос ..."></label>
+      <label class="field"><span>TAG дугаар (Position No) *</span><input id="e_tag" required placeholder="ж: MG-101"></label>
+      <label class="field"><span>Нэр *</span><input id="e_name" required placeholder="Тоног төхөөрөмжийн нэр"></label>
+      <label class="field"><span>PD дугаар</span><input id="e_pd" list="pdList" placeholder="ж: 31PD-01"></label>
+      <label class="field"><span>Ангилал</span><input id="e_cat" placeholder="MG / GT / CV ..."></label>
       <label class="field"><span>Байршил</span><select id="e_area"><option value="">—</option>${optList(DB.areas)}</select></label>
       <label class="field"><span>Эгзэгтэй байдал</span><select id="e_crit">${optList(['Бага','Дунд','Өндөр','Эгзэгтэй'],'Дунд')}</select></label>
-      <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form></div>
-  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportEquip()">📤 Excel татах</button>')}
-  <div class="glass card" style="padding:0;overflow:auto"><table>
-    <thead><tr><th>TAG</th><th>Нэр</th><th>Байршил</th><th>Ангилал</th><th>Эгзэгтэй байдал</th><th>Гэмтэл</th><th></th></tr></thead>
-    <tbody>${DB.equip.map(e=>{const f=DB.wos.filter(w=>w.equip===e.tag&&w.fault&&inRange(w.date)).length;
-      const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
-      return `<tr><td class="t-accent" style="font-family:monospace">${esc(e.tag)}</td><td>${esc(e.name)}</td><td class="muted">${esc(e.area)||'—'}</td>
-      <td>${esc(e.cat)||'—'}</td><td><span class="badge ${tb}">${esc(e.crit)}</span></td><td>${f}</td>
-      <td><button class="del" onclick="delEquip('${esc(e.tag)}')">✕</button></td></tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж алга.</td></tr>'}</tbody></table></div>`;}
+      <div style="grid-column:span 3;display:flex;align-items:end"><button class="btn">Нэмэх</button></div></div></form></div>
+  <div class="glass card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center">
+    🔍 <input id="eq" value="${esc(window._eq||'')}" placeholder="TAG, нэр, PD-аар хайх…" oninput="refreshEq(this.value)">
+    <button class="btn btn-sm btn-ghost" onclick="exportEquip()">📤 Excel</button></div>
+  <div id="eqResults">${eqResultsHTML()}</div>`;}
 function addEquip(e){e.preventDefault();const tag=val('e_tag').trim();
   if(DB.equip.some(x=>x.tag===tag)){toast('Энэ TAG бүртгэлтэй');return;}
-  DB.equip.push({tag,name:val('e_name').trim(),cat:val('e_cat').trim(),area:val('e_area'),crit:val('e_crit')});save();toast('Нэмэгдэж хадгалагдлаа ✓');render();}
+  DB.equip.push({tag,name:val('e_name').trim(),pd:val('e_pd').trim(),cat:val('e_cat').trim(),area:val('e_area'),crit:val('e_crit')});save();toast('Нэмэгдэж хадгалагдлаа ✓');render();}
 function delEquip(tag){if(!confirm(tag+' -ийг устгах уу?'))return;DB.equip=DB.equip.filter(e=>e.tag!==tag);save();render();}
-function exportEquip(){const rows=[['TAG','Нэр','Байршил','Ангилал','Эгзэгтэй байдал']];
-  DB.equip.forEach(e=>rows.push([e.tag,e.name,e.area,e.cat,e.crit]));downloadCSV('Tonog-tohooromj',rows);}
+function exportEquip(){const rows=[['TAG','Нэр','PD','Байршил','Ангилал','Эгзэгтэй байдал']];
+  DB.equip.forEach(e=>rows.push([e.tag,e.name,e.pd||'',e.area,e.cat,e.crit]));downloadCSV('Tonog-tohooromj',rows);}
 
 /* ---- Найдвартай ажиллагаа ---- */
 function viewReliab(){const r=equipReliability();
