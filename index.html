@@ -56,8 +56,11 @@
   .b-teal{background:rgba(30,200,200,.15);color:var(--teal)} .b-muted{background:rgba(255,255,255,.06);color:var(--muted)}
   .btn{background:var(--accent);border:0;color:#fff;border-radius:9px;padding:10px 18px;font-size:14px;cursor:pointer;font-family:inherit}
   .btn:hover{filter:brightness(1.08)} .btn-sm{padding:7px 12px;font-size:13px}
+  .btn-ghost{background:rgba(255,255,255,.06);color:var(--text)}
   .del{background:none;border:0;color:var(--danger);cursor:pointer;font-size:16px;padding:2px 8px;border-radius:6px}
   .del:hover{background:rgba(255,77,79,.12)}
+  .ic{background:none;border:0;color:var(--muted);cursor:pointer;font-size:15px;padding:2px 7px;border-radius:6px}
+  .ic:hover{background:rgba(255,255,255,.08);color:#fff}
   .field{display:block} .field span{font-size:12px;color:var(--muted)} .field>div,.field input,.field select,.field textarea{margin-top:5px}
   .section-title{font-size:14px;font-weight:600;margin:0 0 12px;display:flex;gap:8px;align-items:center}
   .menu-btn{display:none;background:none;border:0;color:var(--text);font-size:22px;cursor:pointer}
@@ -71,6 +74,9 @@
   .chip{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 14px;font-size:13px}
   .addbar{display:flex;gap:8px;margin-top:6px}
   .tot td{font-weight:700;background:rgba(46,139,255,.06)}
+  .toolbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap}
+  .report-body h2{font-size:15px;margin:18px 0 8px} .report-body p{line-height:1.7;color:var(--text)}
+  .report-body ul{margin:6px 0 0 0;padding-left:18px} .report-body li{margin:4px 0;line-height:1.6}
 </style>
 </head>
 <body>
@@ -122,6 +128,8 @@ let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
   fetch('/api/data',{method:'PUT',headers:jsonHdr(),body:JSON.stringify(DB)})
     .then(r=>{if(!r.ok)r.json().then(e=>toast(e.error||'Хадгалах алдаа гарлаа'));});},250);}
+function notify(text){fetch('/api/notify',{method:'POST',headers:jsonHdr(),body:JSON.stringify({text})})
+  .then(r=>r.json()).then(d=>{if(d&&d.ok)toast('Telegram мэдэгдэл илгээгдлээ ✓');}).catch(()=>{});}
 
 const STATUSES=['Нээлттэй','Хийгдэж буй','Дууссан','Цуцлагдсан'];
 const PRIOS=['Бага','Дунд','Өндөр','Эгзэгтэй'];
@@ -143,6 +151,24 @@ const isoStatus=i=>i.status||'Тусгаарласан';
 const isoShift=i=>i.shift||'—';
 const num=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
 const unitEnergy=(e,f)=>f>0?Math.round(e/f*100)/100:0;
+
+/* ---- Export туслахууд ---- */
+function downloadCSV(name,rows){
+  const csv='﻿'+rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=name+'.csv';document.body.appendChild(a);a.click();a.remove();toast('Excel (CSV) татаж байна ✓');}
+function printHTML(title,inner){
+  const w=window.open('','_blank');if(!w){toast('Popup-ийг зөвшөөрнө үү (PDF)');return;}
+  w.document.write('<!doctype html><html lang="mn"><head><meta charset="utf-8"><title>'+title+'</title>'+
+   '<style>body{font-family:Segoe UI,sans-serif;padding:26px;color:#111}h1{font-size:20px;margin:0 0 4px}'+
+   'h2{font-size:14px;margin:16px 0 6px}.muted{color:#666;font-size:12px}p{line-height:1.65;font-size:13px}'+
+   'ul{padding-left:18px}li{margin:4px 0;font-size:13px}'+
+   'table{border-collapse:collapse;width:100%;margin-top:6px}th,td{border:1px solid #aaa;padding:6px 8px;font-size:12px;text-align:left}'+
+   'th{background:#eee}</style></head><body>'+inner+
+   '<p class="muted" style="margin-top:22px">НБҮГ-ЗТХ Цахилгааны нэгж · Тайлангийн систем · Хэвлэсэн: '+new Date().toLocaleString('mn-MN')+'</p>'+
+   '</body></html>');
+  w.document.close();w.focus();setTimeout(function(){w.print();},400);}
+function exportBar(){return '<div class="toolbar">'+Array.prototype.join.call(arguments,'')+'</div>';}
 
 /* ============ KPI ============ */
 function kpis(){
@@ -200,8 +226,8 @@ const BASE_PAGES=[
   ['dash','Нүүр / Dashboard','📊'],['new','Шинэ мэдээ оруулах','➕'],
   ['energy','Эрчим хүчний хэрэглээ','🔋'],['work','Ажлын түүх / Хайлт','📋'],
   ['iso','Тусгаарлалт / PD','🔒'],['equip','Тоног төхөөрөмж','📦'],
-  ['reliab','Найдвартай ажиллагаа','📈'],['eng','Инженерийн гүйцэтгэл','👤'],
-  ['faults','Цахилгааны гэмтэл','⚡'],['ref','Лавлах / Тохиргоо','⚙️'],
+  ['reliab','Найдвартай ажиллагаа','📈'],['report','Тайлан / Дүгнэлт','📅'],
+  ['eng','Инженерийн гүйцэтгэл','👤'],['faults','Цахилгааны гэмтэл','⚡'],['ref','Лавлах / Тохиргоо','⚙️'],
 ];
 function pages(){const p=[...BASE_PAGES];if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥']);return p;}
 let CUR='dash';
@@ -219,6 +245,7 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='iso'){v.innerHTML=viewIso();drawIsoCharts();}
   else if(CUR==='equip')v.innerHTML=viewEquip();
   else if(CUR==='reliab')v.innerHTML=viewReliab();
+  else if(CUR==='report')v.innerHTML=viewReport();
   else if(CUR==='eng')v.innerHTML=viewEng();
   else if(CUR==='faults')v.innerHTML=viewFaults();
   else if(CUR==='ref')v.innerHTML=viewRef();
@@ -298,7 +325,7 @@ function viewNew(){return `${dataListEquip()}<form onsubmit="saveReport(event)" 
         <label class="field"><span>Root Cause</span><input id="w_root"></label>
         <label class="field"><span>Action Taken</span><input id="w_action"></label></div>
     </div>
-    <div class="note" style="margin-top:12px">Авто тооцоо: Downtime = <b id="downPrev">— (Start/Finish оруулна уу)</b></div>
+    <div class="note" style="margin-top:12px">Авто тооцоо: Downtime = <b id="downPrev">— (Start/Finish оруулна уу)</b> · Эгзэгтэй/Өндөр гэмтэл бол Telegram мэдэгдэл илгээнэ.</div>
   </div>
   <button class="btn">Хадгалах</button></form>`;}
 function calcDown(){const s=val('w_start'),f=val('w_finish');let txt='— (Start/Finish оруулна уу)';
@@ -307,11 +334,15 @@ function val(id){return document.getElementById(id).value;}
 function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
   const no='DR-'+val('f_date').replaceAll('-','')+'-'+val('f_shift')+'-'+(val('f_dn')==='Өдөр'?'D':'N');
   DB.reports.push({id:rid,no,date:val('f_date'),shift:val('f_shift'),dn:val('f_dn'),head:+val('f_head'),lines:+val('f_lines'),notes:''});
-  if(val('w_desc').trim()){const s=val('w_start'),f=val('w_finish');
+  if(val('w_desc').trim()){const s=val('w_start'),f=val('w_finish');const isFault=document.getElementById('w_fault').checked;
+    const prio=val('w_prio'),equip=val('w_equip'),desc=val('w_desc');
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:rid,date:val('f_date'),
-      equip:val('w_equip'),area:val('w_area'),type:val('w_type'),prio:val('w_prio'),status:val('w_status'),
-      desc:val('w_desc'),fault:document.getElementById('w_fault').checked,root:val('w_root'),action:val('w_action'),
-      start:s,finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng')});}
+      equip,area:val('w_area'),type:val('w_type'),prio,status:val('w_status'),
+      desc,fault:isFault,root:val('w_root'),action:val('w_action'),
+      start:s,finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng')});
+    if(isFault&&(prio==='Эгзэгтэй'||prio==='Өндөр')){
+      notify('⚡ '+prio+' зэрэглэлийн ГЭМТЭЛ\nТоног: '+(equip||'—')+'\nТайлбар: '+desc+'\nОгноо: '+val('f_date')+' ('+val('f_shift')+' ээлж)');}
+  }
   save();toast('Хадгалагдлаа ✓ ('+no+')');go('dash');}
 
 /* ---- Эрчим хүч ---- */
@@ -337,6 +368,7 @@ function viewEnergy(){const ens=DB.energy.filter(e=>inRange(e.date)).sort((a,b)=
       <label class="field"><span>Тэзү утга</span><input id="en_tezu" placeholder="(заавал биш)"></label>
     </div><div style="margin-top:12px"><button class="btn">Бүртгэх</button>
       <span class="muted" style="font-size:12px;margin-left:10px">Нэгж бүт. = Эрчим хүч ÷ Тэжээл (авто)</span></div></form></div>
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportEnergy()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>Огноо</th><th>Ээлж</th><th>Авсан тэжээл</th><th>Эрчим хүчний хэрэглээ</th><th>Нэгж бүт. кВт/цаг</th><th>Тэзү</th><th></th></tr></thead>
     <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
@@ -347,21 +379,30 @@ function calcUnit(){const f=+val('en_feed'),e=+val('en_energy');document.getElem
 function addEnergy(ev){ev.preventDefault();DB.energy.push({id:++DB.seq.energy,date:val('en_date'),shift:val('en_shift'),feed:+val('en_feed'),energy:+val('en_energy'),tezu:val('en_tezu')});
   save();toast('Эрчим хүчний бүртгэл нэмэгдлээ ✓');render();}
 function delEnergy(id){if(!confirm('Энэ бүртгэлийг устгах уу?'))return;DB.energy=DB.energy.filter(e=>e.id!==id);save();render();}
+function exportEnergy(){const ens=DB.energy.filter(e=>inRange(e.date)).sort((a,b)=>a.date<b.date?1:-1);
+  const rows=[['Огноо','Ээлж','Авсан тэжээл (мян/тн)','Эрчим хүч (кВт/цаг)','Нэгж бүт. (кВт/цаг)','Тэзү']];
+  ens.forEach(e=>rows.push([e.date,e.shift,e.feed,e.energy,unitEnergy(e.energy,e.feed),e.tezu]));
+  downloadCSV('Erchim-huch_'+RANGE.from+'_'+RANGE.to,rows);}
 
 /* ---- Ажлын түүх ---- */
 function badgeFor(s){return{'Дууссан':'b-ok','Нээлттэй':'b-accent','Хийгдэж буй':'b-warn','Цуцлагдсан':'b-muted'}[s]||'b-muted';}
 function viewWork(){return `<div class="glass card" style="margin-bottom:16px;display:flex;gap:10px;align-items:center">
     🔍 <input id="q" placeholder="Tag, төхөөрөмж, инженер, байршил, WO дугаараар хайх…" oninput="renderWorkTable()"></div>
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportWork()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table id="wtable"></table></div>`;}
-function renderWorkTable(){const q=(document.getElementById('q')?.value||'').toLowerCase();
+function currentWorkRows(){const q=(document.getElementById('q')?.value||'').toLowerCase();
   let rows=DB.wos.filter(w=>inRange(w.date));
   if(q)rows=DB.wos.filter(w=>[w.no,w.equip,w.area,w.eng,w.desc].join(' ').toLowerCase().includes(q));
-  rows.sort((a,b)=>a.date<b.date?1:-1);
+  return rows.sort((a,b)=>a.date<b.date?1:-1);}
+function renderWorkTable(){const rows=currentWorkRows();
   document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус</th><th>Огноо</th></tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td>
       <td>${esc(w.equip)||'—'}</td><td style="max-width:280px">${esc(w.desc)}</td><td class="muted">${esc(w.area)||'—'}</td>
       <td>${esc(w.eng)||'—'}</td><td><span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span></td>
       <td class="muted" style="font-size:12px">${w.date}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
+function exportWork(){const rows=[['WO','Tag','Тайлбар','Байршил','Төрөл','Priority','Инженер','Статус','Downtime(мин)','Огноо']];
+  currentWorkRows().forEach(w=>rows.push([w.no,w.equip,w.desc,w.area,w.type,w.prio,w.eng,w.status,downtimeOf(w),w.date]));
+  downloadCSV('Ajliin-tuuh_'+RANGE.from+'_'+RANGE.to,rows);}
 
 /* ---- Тусгаарлалт ---- */
 function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1);
@@ -385,6 +426,7 @@ function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b
       <label class="field"><span>Хийсэн хүн</span><select id="i_by"><option value="">—</option>${optList(DB.isoPersons)}</select></label>
       <label class="field" style="grid-column:span 2"><span>Тэмдэглэл</span><input id="i_note"></label>
     </div><div style="margin-top:12px"><button class="btn">Бүртгэх</button></div></form></div>
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportIso()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>Огноо</th><th>Ээлж</th><th>Төрөл</th><th>Төхөөрөмж</th><th>Төлөв</th><th>PD №</th><th>Хийсэн хүн</th><th>Тэмдэглэл</th><th></th></tr></thead>
     <tbody>${isos.map(i=>{const st=isoStatus(i);const sb={'Тусгаарласан':'b-danger','Сэргээсэн':'b-ok','Шилжүүлсэн':'b-muted'}[st]||'b-muted';
@@ -401,6 +443,9 @@ function drawIsoCharts(){isoCharts.forEach(c=>c.destroy());isoCharts=[];const is
 function addIso(e){e.preventDefault();DB.isolations.push({id:++DB.seq.iso,date:val('i_date'),shift:val('i_shift'),type:val('i_type'),
     equip:val('i_equip'),status:val('i_status'),pd:val('i_pd'),by:val('i_by'),note:val('i_note')});save();toast('Тусгаарлалт бүртгэгдлээ ✓');render();}
 function delIso(id){if(!confirm('Устгах уу?'))return;DB.isolations=DB.isolations.filter(i=>i.id!==id);save();render();}
+function exportIso(){const rows=[['Огноо','Ээлж','Төрөл','Төхөөрөмж','Төлөв','PD №','Хийсэн хүн','Тэмдэглэл']];
+  DB.isolations.filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(i=>rows.push([i.date,isoShift(i),i.type,i.equip,isoStatus(i),isoPD(i),i.by,i.note]));
+  downloadCSV('Tusgaarlalt_'+RANGE.from+'_'+RANGE.to,rows);}
 
 /* ---- Тоног төхөөрөмж ---- */
 function viewEquip(){return `<div class="glass card" style="margin-bottom:16px">
@@ -412,6 +457,7 @@ function viewEquip(){return `<div class="glass card" style="margin-bottom:16px">
       <label class="field"><span>Байршил</span><select id="e_area"><option value="">—</option>${optList(DB.areas)}</select></label>
       <label class="field"><span>Эгзэгтэй байдал</span><select id="e_crit">${optList(['Бага','Дунд','Өндөр','Эгзэгтэй'],'Дунд')}</select></label>
       <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form></div>
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportEquip()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>TAG</th><th>Нэр</th><th>Байршил</th><th>Ангилал</th><th>Эгзэгтэй байдал</th><th>Гэмтэл</th><th></th></tr></thead>
     <tbody>${DB.equip.map(e=>{const f=DB.wos.filter(w=>w.equip===e.tag&&w.fault&&inRange(w.date)).length;
@@ -423,15 +469,76 @@ function addEquip(e){e.preventDefault();const tag=val('e_tag').trim();
   if(DB.equip.some(x=>x.tag===tag)){toast('Энэ TAG бүртгэлтэй');return;}
   DB.equip.push({tag,name:val('e_name').trim(),cat:val('e_cat').trim(),area:val('e_area'),crit:val('e_crit')});save();toast('Нэмэгдэж хадгалагдлаа ✓');render();}
 function delEquip(tag){if(!confirm(tag+' -ийг устгах уу?'))return;DB.equip=DB.equip.filter(e=>e.tag!==tag);save();render();}
+function exportEquip(){const rows=[['TAG','Нэр','Байршил','Ангилал','Эгзэгтэй байдал']];
+  DB.equip.forEach(e=>rows.push([e.tag,e.name,e.area,e.cat,e.crit]));downloadCSV('Tonog-tohooromj',rows);}
 
 /* ---- Найдвартай ажиллагаа ---- */
 function viewReliab(){const r=equipReliability();
   return `<div class="note" style="margin-bottom:16px">Тоноглол бүрийн зогсолт, downtime, MTBF, MTTR-ийг бүртгэсэн гэмтэл/ажлаас <b>автоматаар</b> тооцоолно. Огнооны шүүлтүүрээр (сар/жил) хугацааг өөрчилнө.</div>
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportReliab()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>TAG (асет)</th><th>Нэр</th><th>Зогсолтын тоо</th><th>Нийт downtime (мин)</th><th>MTTR (мин)</th><th>MTBF (цаг)</th><th>Нийт ажил</th></tr></thead>
     <tbody>${r.map(x=>`<tr><td class="t-accent" style="font-family:monospace">${esc(x.tag)}</td><td>${esc(x.name)}</td>
       <td><b class="${x.stops?'t-danger':'t-muted'}">${x.stops}</b></td><td class="t-warn">${x.down}</td><td>${x.mttr}</td>
       <td class="t-accent">${x.mtbf}</td><td class="muted">${x.works}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж алга.</td></tr>'}</tbody></table></div>`;}
+function exportReliab(){const rows=[['TAG','Нэр','Зогсолтын тоо','Нийт downtime(мин)','MTTR(мин)','MTBF(цаг)','Нийт ажил']];
+  equipReliability().forEach(x=>rows.push([x.tag,x.name,x.stops,x.down,x.mttr,x.mtbf,x.works]));
+  downloadCSV('Naidvartai-ajillagaa_'+RANGE.from+'_'+RANGE.to,rows);}
+
+/* ---- ТАЙЛАН / ДҮГНЭЛТ (авто) ---- */
+function reportData(){const k=kpis();const rel=equipReliability();const topStop=rel.find(x=>x.stops>0);
+  const reco=[];
+  if(k.unplanned>k.planned)reco.push('Төлөвлөгөөт бус ажил төлөвлөгөөтөөс их байна — урьдчилан сэргийлэх (PM) засварыг нэмэгдүүлэхийг зөвлөж байна.');
+  if(topStop)reco.push('Хамгийн олон ('+topStop.stops+' удаа) зогссон "'+topStop.tag+'" тоноглолд нарийвчилсан оношилгоо хийхийг зөвлөж байна.');
+  if(k.open>0)reco.push(k.open+' нээлттэй ажил байна — хяналтад авч хаахыг анхаарна уу.');
+  if(k.avail<98)reco.push('Availability 98%-аас доош байна — зогсолтын шалтгааныг бууруулах шаардлагатай.');
+  if(!reco.length)reco.push('Үндсэн үзүүлэлтүүд хэвийн түвшинд байна.');
+  const narrative='Тайлант хугацаанд ('+RANGE.from+' — '+RANGE.to+') нийт '+k.total+' ажил бүртгэснээс '+k.done+' нь дууссан (гүйцэтгэл '+k.completion+'%). Үүнээс эвдрэл '+k.faults+', нийт зогсолт '+k.down+' минут. Тоног төхөөрөмжийн бэлэн байдал (Availability) '+k.avail+'%, MTBF '+k.mtbf+' цаг, MTTR '+k.mttr+' минут. Нэгж бүтээгдэхүүнд зарцуулсан эрчим хүч дунджаар '+k.unitEnergy+' кВт/цаг. Тусгаарлалт нийт '+(k.isoStd+k.isoGrp)+' (стандарт '+k.isoStd+', групп '+k.isoGrp+'). Нийт ажилласан хүн-цаг '+k.workHours+'.';
+  return {k,rel,topStop,reco,narrative};}
+function viewReport(){const rd=reportData();const k=rd.k;
+  const metrics=[['Нийт ажил',k.total],['Хийгдсэн',k.done],['Гүйцэтгэл',k.completion+'%'],['Төлөвлөгөөт',k.planned],
+    ['Төлөвлөгөөт бус',k.unplanned],['Гэмтэл',k.faults],['Нээлттэй ажил',k.open],['Availability',k.avail+'%'],
+    ['MTBF (цаг)',k.mtbf],['MTTR (мин)',k.mttr],['Downtime (мин)',k.down],['Нэгж бүт. эрчим хүч',k.unitEnergy+' кВт/цаг'],
+    ['Тусгаарлалт (нийт)',k.isoStd+k.isoGrp],['Ажилласан хүн-цаг',k.workHours]];
+  const topRel=rd.rel.filter(x=>x.stops>0).slice(0,5);
+  return exportBar(
+      '<button class="btn btn-sm btn-ghost" onclick="exportReportExcel()">📤 Excel татах</button>',
+      '<button class="btn btn-sm" onclick="printReport()">🖨 PDF / Хэвлэх</button>')+
+  `<div class="glass card report-body">
+    <h1 style="font-size:20px;margin:0">📅 Үйл ажиллагааны тайлан</h1>
+    <div class="muted" style="margin-top:4px">Хугацаа: <b>${RANGE.from} — ${RANGE.to}</b></div>
+    <h2>Товч дүгнэлт</h2><p>${esc(rd.narrative)}</p>
+    <h2>Үндсэн үзүүлэлт</h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:6px">
+      ${metrics.map(m=>`<div class="glass" style="padding:10px 12px;border-radius:10px"><div class="muted" style="font-size:11px">${m[0]}</div><div style="font-size:18px;font-weight:700" class="t-accent">${m[1]}</div></div>`).join('')}
+    </div>
+    <h2>Хамгийн олон зогссон тоног төхөөрөмж</h2>
+    <table style="margin-top:6px"><thead><tr><th>TAG</th><th>Зогсолт</th><th>Downtime (мин)</th><th>MTTR</th><th>MTBF (цаг)</th></tr></thead>
+      <tbody>${topRel.map(x=>`<tr><td class="t-accent" style="font-family:monospace">${esc(x.tag)}</td><td class="t-danger">${x.stops}</td><td>${x.down}</td><td>${x.mttr}</td><td>${x.mtbf}</td></tr>`).join('')||'<tr><td colspan="5" class="muted" style="text-align:center;padding:18px">Энэ хугацаанд эвдрэл алга.</td></tr>'}</tbody></table>
+    <h2>Зөвлөмж</h2><ul>${rd.reco.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+  </div>`;}
+function exportReportExcel(){const rd=reportData();const k=rd.k;
+  const rows=[['ҮЙЛ АЖИЛЛАГААНЫ ТАЙЛАН'],['Хугацаа',RANGE.from+' — '+RANGE.to],[],
+    ['Үзүүлэлт','Утга'],['Нийт ажил',k.total],['Хийгдсэн',k.done],['Гүйцэтгэл %',k.completion],
+    ['Төлөвлөгөөт',k.planned],['Төлөвлөгөөт бус',k.unplanned],['Гэмтэл',k.faults],['Нээлттэй ажил',k.open],
+    ['Availability %',k.avail],['MTBF цаг',k.mtbf],['MTTR мин',k.mttr],['Downtime мин',k.down],
+    ['Нэгж бүт. эрчим хүч кВт/цаг',k.unitEnergy],['Тусгаарлалт нийт',k.isoStd+k.isoGrp],['Ажилласан хүн-цаг',k.workHours],[],
+    ['ТОНОГ ТӨХӨӨРӨМЖИЙН НАЙДВАРТАЙ АЖИЛЛАГАА'],['TAG','Зогсолт','Downtime(мин)','MTTR','MTBF(цаг)']];
+  rd.rel.forEach(x=>rows.push([x.tag,x.stops,x.down,x.mttr,x.mtbf]));
+  downloadCSV('Tailan_'+RANGE.from+'_'+RANGE.to,rows);}
+function printReport(){const rd=reportData();const k=rd.k;const topRel=rd.rel.filter(x=>x.stops>0);
+  const metrics=[['Нийт ажил',k.total],['Хийгдсэн',k.done],['Гүйцэтгэл',k.completion+'%'],['Төлөвлөгөөт',k.planned],
+    ['Төлөвлөгөөт бус',k.unplanned],['Гэмтэл',k.faults],['Нээлттэй',k.open],['Availability',k.avail+'%'],
+    ['MTBF (цаг)',k.mtbf],['MTTR (мин)',k.mttr],['Downtime (мин)',k.down],['Нэгж бүт. эрчим хүч',k.unitEnergy+' кВт/цаг'],
+    ['Тусгаарлалт',k.isoStd+k.isoGrp],['Ажилласан хүн-цаг',k.workHours]];
+  const inner='<h1>Үйл ажиллагааны тайлан</h1><div class="muted">Хугацаа: '+RANGE.from+' — '+RANGE.to+'</div>'+
+    '<h2>Товч дүгнэлт</h2><p>'+esc(rd.narrative)+'</p>'+
+    '<h2>Үндсэн үзүүлэлт</h2><table><tbody>'+metrics.map(m=>'<tr><td>'+m[0]+'</td><td><b>'+m[1]+'</b></td></tr>').join('')+'</tbody></table>'+
+    '<h2>Хамгийн олон зогссон тоног төхөөрөмж</h2>'+
+    '<table><thead><tr><th>TAG</th><th>Зогсолт</th><th>Downtime(мин)</th><th>MTTR</th><th>MTBF(цаг)</th></tr></thead><tbody>'+
+    (topRel.map(x=>'<tr><td>'+esc(x.tag)+'</td><td>'+x.stops+'</td><td>'+x.down+'</td><td>'+x.mttr+'</td><td>'+x.mtbf+'</td></tr>').join('')||'<tr><td colspan="5">Эвдрэл алга</td></tr>')+'</tbody></table>'+
+    '<h2>Зөвлөмж</h2><ul>'+rd.reco.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>';
+  printHTML('Тайлан '+RANGE.from+' '+RANGE.to,inner);}
 
 /* ---- Инженер ---- */
 function viewEng(){const m={};DB.wos.filter(w=>inRange(w.date)&&w.eng).forEach(w=>{m[w.eng]=m[w.eng]||{works:0,done:0,down:0};
@@ -446,12 +553,16 @@ function viewEng(){const m={};DB.wos.filter(w=>inRange(w.date)&&w.eng).forEach(w
 function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1);
   return `<div class="note" style="margin-bottom:16px">Гэмтлийг "Шинэ мэдээ оруулах" дээр <b>"Эвдрэл эсэх ☑"</b> тэмдэглэхэд бүртгэгдэнэ.
     <button class="btn btn-sm" style="margin-left:10px" onclick="go('new')">➕ Гэмтэл бүртгэх</button></div>
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportFaults()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>Priority</th><th>Root Cause</th><th>Action Taken</th><th>Downtime</th><th>Статус</th></tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td><td>${esc(w.equip)}</td>
       <td style="max-width:240px">${esc(w.desc)}</td><td><span class="badge ${w.prio==='Эгзэгтэй'?'b-danger':w.prio==='Өндөр'?'b-warn':'b-accent'}">${esc(w.prio)}</span></td>
       <td class="muted">${esc(w.root)||'—'}</td><td class="muted">${esc(w.action)||'—'}</td><td>${downtimeOf(w)} мин</td>
       <td><span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span></td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Гэмтэл алга.</td></tr>'}</tbody></table></div>`;}
+function exportFaults(){const rows=[['WO','Tag','Тайлбар','Priority','Root Cause','Action Taken','Downtime(мин)','Статус','Огноо']];
+  DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(w=>rows.push([w.no,w.equip,w.desc,w.prio,w.root,w.action,downtimeOf(w),w.status,w.date]));
+  downloadCSV('Gemtel_'+RANGE.from+'_'+RANGE.to,rows);}
 
 /* ---- Лавлах ---- */
 function refBlock(title,kind,arr){return `<div class="glass card"><div class="section-title">${title}</div>
@@ -474,18 +585,32 @@ function viewUsers(){return `<div class="glass card" style="margin-bottom:16px">
       <label class="field"><span>Нууц үг *</span><input id="u_pw" required placeholder="нууц үг"></label>
       <label class="field"><span>Эрх</span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
       <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form>
-    <div class="note" style="margin-top:12px">Эрх: <b>Админ</b>=бүх эрх+хэрэглэгч удирдах · <b>Ахлах/Инженер/Техникч</b>=бүртгэх, засах · <b>Үзэгч</b>=зөвхөн харах.</div></div>
+    <div class="note" style="margin-top:12px">🔑 товчоор нууц үг солино · ⚙️ товчоор эрх солино · Эрх: <b>Админ</b>=бүх эрх+хэрэглэгч удирдах · <b>Ахлах/Инженер/Техникч</b>=бүртгэх, засах · <b>Үзэгч</b>=зөвхөн харах.</div></div>
   <div class="glass card" style="padding:0;overflow:auto"><table id="userTable"><tbody><tr><td class="muted" style="padding:20px">Уншиж байна…</td></tr></tbody></table></div>`;}
 async function loadUsers(){try{const us=await api('/api/users',{headers:authHdr()});
-  document.getElementById('userTable').innerHTML=`<thead><tr><th>Нэвтрэх нэр</th><th>Овог нэр</th><th>Эрх</th><th></th></tr></thead>
+  document.getElementById('userTable').innerHTML=`<thead><tr><th>Нэвтрэх нэр</th><th>Овог нэр</th><th>Эрх</th><th style="text-align:right">Үйлдэл</th></tr></thead>
     <tbody>${us.map(u=>`<tr><td style="font-family:monospace">${esc(u.username)}</td><td>${esc(u.name)}</td>
       <td><span class="badge ${u.role==='ADMIN'?'b-danger':u.role==='VIEWER'?'b-muted':'b-accent'}">${roleLabel(u.role)}</span></td>
-      <td>${u.id===ME.id?'<span class="muted" style="font-size:12px">(та)</span>':`<button class="del" onclick="delUser(${u.id},'${esc(u.username)}')">✕</button>`}</td></tr>`).join('')}</tbody>`;
+      <td style="text-align:right;white-space:nowrap">
+        <button class="ic" title="Нууц үг солих" onclick="editUserPw(${u.id},'${esc(u.username)}')">🔑</button>
+        <button class="ic" title="Эрх солих" onclick="editUserRole(${u.id},'${esc(u.username)}','${u.role}')">⚙️</button>
+        ${u.id===ME.id?'<span class="muted" style="font-size:12px;margin-left:4px">(та)</span>':`<button class="del" title="Устгах" onclick="delUser(${u.id},'${esc(u.username)}')">✕</button>`}
+      </td></tr>`).join('')}</tbody>`;
   }catch(e){toast(e.message);}}
 async function addUser(e){e.preventDefault();
   try{await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify({
       username:val('u_username').trim(),name:val('u_name').trim(),password:val('u_pw'),role:val('u_role')})});
     toast('Хэрэглэгч нэмэгдлээ ✓');render();}catch(err){toast(err.message);}}
+async function editUserPw(id,name){const pw=prompt('"'+name+'" хэрэглэгчийн ШИНЭ нууц үг оруулна уу:');
+  if(!pw||!pw.trim())return;
+  try{await api('/api/users/'+id,{method:'PUT',headers:jsonHdr(),body:JSON.stringify({password:pw.trim()})});toast('Нууц үг солигдлоо ✓');}
+  catch(err){toast(err.message);}}
+async function editUserRole(id,name,cur){
+  const list=ROLES.map((r,i)=>(i+1)+'='+r[1]).join(', ');
+  const ans=prompt('"'+name+'" -ийн эрхийг сонгоно уу:\n'+list+'\n(одоо: '+roleLabel(cur)+')');
+  if(!ans)return;const idx=parseInt(ans,10)-1;if(isNaN(idx)||!ROLES[idx]){toast('Буруу сонголт');return;}
+  try{await api('/api/users/'+id,{method:'PUT',headers:jsonHdr(),body:JSON.stringify({role:ROLES[idx][0]})});toast('Эрх солигдлоо ✓');render();}
+  catch(err){toast(err.message);}}
 async function delUser(id,name){if(!confirm(name+' хэрэглэгчийг устгах уу?'))return;
   try{await api('/api/users/'+id,{method:'DELETE',headers:authHdr()});toast('Устгагдлаа');render();}catch(err){toast(err.message);}}
 

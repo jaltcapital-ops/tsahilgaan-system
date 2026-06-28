@@ -4,6 +4,7 @@
 //  - Нэвтрэлт: scrypt hash (Node built-in crypto), HMAC token
 //  - Дундын мэдээлэл: data.json файлд хадгална (бүх хэрэглэгч нэг өгөгдөл)
 //  - Админ хэрэглэгч нэмж/хасна
+//  - Telegram мэдэгдэл (сонголтоор)
 // =============================================================================
 import express from 'express';
 import fs from 'node:fs';
@@ -104,6 +105,19 @@ function persist() { fs.writeFileSync(DATA_FILE, JSON.stringify(DB, null, 2)); }
 function persistDebounced() { clearTimeout(saveTimer); saveTimer = setTimeout(persist, 200); }
 load();
 
+/* ---------- Telegram мэдэгдэл (сонголтоор) ---------- */
+async function sendTelegram(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chat) return { ok: false, skipped: true };
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chat, text })
+    });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+
 /* ---------- App ---------- */
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -134,6 +148,14 @@ app.put('/api/data', auth, (req, res) => {
   if (req.user.role === 'VIEWER') return res.status(403).json({ error: 'Үзэгч засах эрхгүй' });
   DB.app = req.body; persistDebounced();
   res.json({ ok: true });
+});
+
+// Telegram мэдэгдэл — чухал гэмтэл, хугацаа хэтэрсэн ажил
+app.post('/api/notify', auth, async (req, res) => {
+  const text = (req.body && req.body.text) || '';
+  if (!text) return res.json({ ok: false, error: 'Текст алга' });
+  const r = await sendTelegram(text);
+  res.json(r);
 });
 
 // Хэрэглэгчийн удирдлага (зөвхөн админ)
