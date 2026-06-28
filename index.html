@@ -136,8 +136,12 @@ const PRIOS=['Бага','Дунд','Өндөр','Эгзэгтэй'];
 const ISO_TYPES=['Стандарт','Групп'];
 const ISO_STATUS=['Тусгаарласан','Сэргээсэн','Шилжүүлсэн'];
 const SHIFT_DN=['Өдөр','Шөнө'];
-const ROLES=[['ADMIN','Админ'],['CHIEF','Ахлах инженер'],['EE','Цахилгааны инженер'],['TECH','Техникч'],['VIEWER','Үзэгч']];
+const ROLES=[['ADMIN','Админ'],['CHIEF','Ахлах инженер'],['MASTER','Цахилгааны мастер'],['EE','Цахилгааны инженер'],['TECH','Техникч'],['ISO_TECH','Тусгаарлалтын техникч'],['VIEWER','Үзэгч']];
 const roleLabel=r=>(ROLES.find(x=>x[0]===r)||[r,r])[1];
+// Эрхийн хяналт: ажлын статусыг зөвхөн Админ + Цахилгааны мастер өөрчилнө
+const canEditWoStatus=()=>ME&&(ME.role==='ADMIN'||ME.role==='MASTER');
+// Тусгаарлалтын төлөвийг зөвхөн Тусгаарлалтын техникч (+Админ) өөрчилнө
+const canEditIsoStatus=()=>ME&&(ME.role==='ADMIN'||ME.role==='ISO_TECH');
 
 /* ============ Туслах ============ */
 function downtimeOf(w){if(w.down!=null)return w.down;if(w.start&&w.finish){let m=(new Date(w.finish)-new Date(w.start))/60000;return m>0?Math.round(m):0;}return 0;}
@@ -394,11 +398,15 @@ function currentWorkRows(){const q=(document.getElementById('q')?.value||'').toL
   let rows=DB.wos.filter(w=>inRange(w.date));
   if(q)rows=DB.wos.filter(w=>[w.no,w.equip,w.area,w.eng,w.desc].join(' ').toLowerCase().includes(q));
   return rows.sort((a,b)=>a.date<b.date?1:-1);}
-function renderWorkTable(){const rows=currentWorkRows();
-  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус</th><th>Огноо</th></tr></thead>
+function woStatusCell(w){
+  if(canEditWoStatus())return `<select onchange="setWoStatus(${w.id},this.value)" style="padding:4px 6px;font-size:12px;width:auto">${STATUSES.map(s=>`<option ${s===w.status?'selected':''}>${esc(s)}</option>`).join('')}</select>`;
+  return `<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`;}
+function setWoStatus(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.status=val;save();toast('Статус шинэчлэгдлээ ✓');renderWorkTable();}
+function renderWorkTable(){const rows=currentWorkRows();const hint=canEditWoStatus()?'':' <span style="font-weight:400;text-transform:none;color:var(--muted)">(зөвхөн Админ/Мастер засна)</span>';
+  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус${hint}</th><th>Огноо</th></tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td>
       <td>${esc(w.equip)||'—'}</td><td style="max-width:280px">${esc(w.desc)}</td><td class="muted">${esc(w.area)||'—'}</td>
-      <td>${esc(w.eng)||'—'}</td><td><span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span></td>
+      <td>${esc(w.eng)||'—'}</td><td>${woStatusCell(w)}</td>
       <td class="muted" style="font-size:12px">${w.date}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
 function exportWork(){const rows=[['WO','Tag','Тайлбар','Байршил','Төрөл','Priority','Инженер','Статус','Downtime(мин)','Огноо']];
   currentWorkRows().forEach(w=>rows.push([w.no,w.equip,w.desc,w.area,w.type,w.prio,w.eng,w.status,downtimeOf(w),w.date]));
@@ -408,6 +416,7 @@ function exportWork(){const rows=[['WO','Tag','Тайлбар','Байршил',
 function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1);
   const std=isos.filter(i=>i.type==='Стандарт').length,grp=isos.filter(i=>i.type==='Групп').length;
   const active=isos.filter(i=>isoStatus(i)==='Тусгаарласан').length,restored=isos.filter(i=>isoStatus(i)==='Сэргээсэн').length,handed=isos.filter(i=>isoStatus(i)==='Шилжүүлсэн').length;
+  const isoHint=canEditIsoStatus()?'':' <span style="font-weight:400;text-transform:none;color:var(--muted)">(зөвхөн Тусгаарлалтын техникч засна)</span>';
   return `${dataListEquip()}
   <div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px">
     ${kpiCard('Нийт тусгаарлалт',isos.length,'accent')}${kpiCard('Стандарт',std,'teal')}${kpiCard('Групп',grp,'warn')}
@@ -428,10 +437,10 @@ function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b
     </div><div style="margin-top:12px"><button class="btn">Бүртгэх</button></div></form></div>
   ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportIso()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
-    <thead><tr><th>Огноо</th><th>Ээлж</th><th>Төрөл</th><th>Төхөөрөмж</th><th>Төлөв</th><th>PD №</th><th>Хийсэн хүн</th><th>Тэмдэглэл</th><th></th></tr></thead>
-    <tbody>${isos.map(i=>{const st=isoStatus(i);const sb={'Тусгаарласан':'b-danger','Сэргээсэн':'b-ok','Шилжүүлсэн':'b-muted'}[st]||'b-muted';
+    <thead><tr><th>Огноо</th><th>Ээлж</th><th>Төрөл</th><th>Төхөөрөмж</th><th>Төлөв${isoHint}</th><th>PD №</th><th>Хийсэн хүн</th><th>Тэмдэглэл</th><th></th></tr></thead>
+    <tbody>${isos.map(i=>{
       return `<tr><td>${i.date}</td><td>${esc(isoShift(i))}</td><td><span class="badge ${i.type==='Групп'?'b-warn':'b-teal'}">${esc(i.type)}</span></td>
-      <td class="t-accent" style="font-family:monospace">${esc(i.equip)}</td><td><span class="badge ${sb}">${esc(st)}</span></td>
+      <td class="t-accent" style="font-family:monospace">${esc(i.equip)}</td><td>${isoStatusCell(i)}</td>
       <td class="muted">${esc(isoPD(i))||'—'}</td><td>${esc(i.by)||'—'}</td><td class="muted" style="max-width:200px">${esc(i.note)||'—'}</td>
       <td><button class="del" onclick="delIso(${i.id})">✕</button></td></tr>`;}).join('')||'<tr><td colspan="9" style="text-align:center;padding:32px" class="muted">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
 let isoCharts=[];
@@ -446,6 +455,10 @@ function delIso(id){if(!confirm('Устгах уу?'))return;DB.isolations=DB.is
 function exportIso(){const rows=[['Огноо','Ээлж','Төрөл','Төхөөрөмж','Төлөв','PD №','Хийсэн хүн','Тэмдэглэл']];
   DB.isolations.filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(i=>rows.push([i.date,isoShift(i),i.type,i.equip,isoStatus(i),isoPD(i),i.by,i.note]));
   downloadCSV('Tusgaarlalt_'+RANGE.from+'_'+RANGE.to,rows);}
+function isoStatusCell(i){const st=isoStatus(i);const sb={'Тусгаарласан':'b-danger','Сэргээсэн':'b-ok','Шилжүүлсэн':'b-muted'}[st]||'b-muted';
+  if(canEditIsoStatus())return `<select onchange="setIsoStatus(${i.id},this.value)" style="padding:4px 6px;font-size:12px;width:auto">${ISO_STATUS.map(s=>`<option ${s===st?'selected':''}>${esc(s)}</option>`).join('')}</select>`;
+  return `<span class="badge ${sb}">${esc(st)}</span>`;}
+function setIsoStatus(id,val){const i=DB.isolations.find(x=>x.id===id);if(!i)return;i.status=val;save();toast('Тусгаарлалтын төлөв шинэчлэгдлээ ✓');render();}
 
 /* ---- Тоног төхөөрөмж ---- */
 function viewEquip(){return `<div class="glass card" style="margin-bottom:16px">

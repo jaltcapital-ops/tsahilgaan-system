@@ -45,16 +45,23 @@ function verify(token) {
   try { return JSON.parse(Buffer.from(body, 'base64url').toString()); } catch { return null; }
 }
 
+/* ---------- Тоног төхөөрөмжийн каталог (схемээс) ---------- */
+function loadCatalog() {
+  try {
+    const c = JSON.parse(fs.readFileSync(path.join(__dirname, 'equipment.json'), 'utf8'));
+    if (Array.isArray(c) && c.length) return c;
+  } catch { /* fallback below */ }
+  return [
+    { tag: 'PP3284', name: 'PP3284 хөдөлгүүр', area: 'Үйлдвэрийн 2-р шугам', cat: 'Хөдөлгүүр', crit: 'Өндөр' },
+    { tag: 'PP3184', name: 'PP3184 хөдөлгүүр', area: 'Үйлдвэрийн 1-р шугам', cat: 'Хөдөлгүүр', crit: 'Дунд' }
+  ];
+}
+
 /* ---------- Анхны өгөгдөл ---------- */
 function seedAppData() {
   return {
-    equip: [
-      { tag: 'PP3284', name: 'PP3284 хөдөлгүүр', area: 'Үйлдвэрийн 2-р шугам', cat: 'Хөдөлгүүр', crit: 'Өндөр' },
-      { tag: 'PP3184', name: 'PP3184 хөдөлгүүр', area: 'Үйлдвэрийн 1-р шугам', cat: 'Хөдөлгүүр', crit: 'Дунд' },
-      { tag: 'PP382', name: 'PP382 насос', area: 'Үйлдвэрийн 2-р шугам', cat: 'Насос', crit: 'Дунд' },
-      { tag: 'TR-01', name: 'Хүчний трансформатор №1', area: 'Дэд станц', cat: 'Трансформатор', crit: 'Эгзэгтэй' }
-    ],
-    areas: ['Үйлдвэрийн 1-р шугам', 'Үйлдвэрийн 2-р шугам', 'Дэд станц'],
+    equip: loadCatalog(),
+    areas: ['Үйлдвэрийн 1-р шугам', 'Үйлдвэрийн 2-р шугам', 'Дэд станц', '11PD', '12PD', '21PD', '31PD', '32PD'],
     types: ['Төлөвлөгөөт', 'Төлөвлөгөөт бус', 'PM', 'CM', 'Шуурхай дуудлага', 'АМХ'],
     engineers: ['Батмандах БАТДАВАА', 'Доржсүрэн ЭРХЭМБАЯР', 'Техникч Бат'],
     isoPersons: ['Батмандах БАТДАВАА', 'Доржсүрэн ЭРХЭМБАЯР'],
