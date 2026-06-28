@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
+// Дискний хавтас байхгүй бол үүсгэх (диск залгаагүй ч ажиллана)
+try { fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true }); } catch { /* ignore */ }
 const SECRET = process.env.SECRET || 'tsahilgaan-secret-CHANGE-ME';
 const PORT = process.env.PORT || 4000;
 
@@ -70,7 +72,7 @@ function seedAppData() {
     equip: loadCatalog(),
     pdList: loadPdList(),
     areas: ['Үйлдвэрийн 1-р шугам', 'Үйлдвэрийн 2-р шугам', 'Дэд станц', '11PD', '12PD', '21PD', '31PD', '32PD'],
-    types: ['Төлөвлөгөөт', 'Төлөвлөгөөт бус', 'PM', 'CM', 'Шуурхай дуудлага', 'АМХ'],
+    types: ['Төлөвлөгөөт', 'Төлөвлөгөөт бус', 'PM', 'CM', 'Шуурхай дуудлага', 'АМХ', 'Онцлох ажил'],
     engineers: ['Батмандах БАТДАВАА', 'Доржсүрэн ЭРХЭМБАЯР', 'Техникч Бат'],
     isoPersons: ['Батмандах БАТДАВАА', 'Доржсүрэн ЭРХЭМБАЯР'],
     reports: [
