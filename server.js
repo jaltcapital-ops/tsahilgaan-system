@@ -93,7 +93,13 @@ function seedAppData() {
       { id: 1, date: '2026-06-01', shift: 'Өдөр', feed: 16722.80, energy: 106800, tezu: '' },
       { id: 2, date: '2026-06-01', shift: 'Шөнө', feed: 15558.80, energy: 111840, tezu: '' }
     ],
-    seq: { report: 2, wo: 3, iso: 3, energy: 2 }
+    parts: [
+      { id: 1, code: 'CBL-25', name: 'Кабель 25mm²', unit: 'м', qty: 120, min: 30 },
+      { id: 2, code: 'BRK-100', name: 'Таслуур 100A', unit: 'ш', qty: 8, min: 3 },
+      { id: 3, code: 'BRG-6205', name: 'Холхивч 6205', unit: 'ш', qty: 15, min: 5 }
+    ],
+    partUsage: [],
+    seq: { report: 2, wo: 3, iso: 3, energy: 2, part: 3, usage: 0 }
   };
 }
 function seedDB() {

@@ -2,9 +2,15 @@
 <html lang="mn">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Цахилгааны нэгж · Өдөр тутмын мэдээ</title>
+<meta name="theme-color" content="#0b1020">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Цахилгаан">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{--base:#0b1020;--panel:#121a2e;--panel2:#172139;--line:#243049;
     --accent:#2e8bff;--teal:#1ec8c8;--ok:#2fd07a;--warn:#ffb020;--danger:#ff4d4f;--muted:#8ea2c0;--text:#e6edf7;}
@@ -143,6 +149,9 @@ const roleLabel=r=>(ROLES.find(x=>x[0]===r)||[r,r])[1];
 const canEditWoStatus=()=>ME&&(ME.role==='ADMIN'||ME.role==='MASTER');
 // Тусгаарлалтын төлөвийг зөвхөн Тусгаарлалтын техникч (+Админ) өөрчилнө
 const canEditIsoStatus=()=>ME&&(ME.role==='ADMIN'||ME.role==='ISO_TECH');
+// Мэдээлэл устгахыг зөвхөн Админ хийнэ
+const canDelete=()=>ME&&ME.role==='ADMIN';
+const delBtn=(fn)=>canDelete()?`<button class="del" onclick="${fn}" title="Устгах">✕</button>`:'';
 
 /* ============ Туслах ============ */
 function downtimeOf(w){if(w.down!=null)return w.down;if(w.start&&w.finish){let m=(new Date(w.finish)-new Date(w.start))/60000;return m>0?Math.round(m):0;}return 0;}
@@ -194,6 +203,7 @@ function kpis(){
   const byStatus={};STATUSES.forEach(s=>byStatus[s]=wos.filter(w=>w.status===s).length);
   return {total:wos.length,done,planned:wos.filter(w=>isPlanned(w.type)).length,
     unplanned:wos.filter(w=>isUnplanned(w.type)).length,faults:faults.length,activeFaults:wos.filter(isActiveFault).length,byStatus,
+    emergency:wos.filter(w=>w.type==='Шуурхай дуудлага').length,
     open:wos.filter(w=>!isClosed(w.status)).length,critical:wos.filter(w=>w.prio==='Эгзэгтэй'&&!isClosed(w.status)).length,
     isoStd:isos.filter(i=>i.type==='Стандарт').length,isoGrp:isos.filter(i=>i.type==='Групп').length,
     down:totalDown,mttr:Math.round(mttr),mtbf:Math.round(mtbf),avail:Math.round(avail*100)/100,workHours,
@@ -236,7 +246,8 @@ const BASE_PAGES=[
   ['energy','Эрчим хүчний хэрэглээ','🔋'],['work','Ажлын түүх / Хайлт','📋'],
   ['iso','Тусгаарлалт / PD','🔒'],['equip','Тоног төхөөрөмж','📦'],
   ['reliab','Найдвартай ажиллагаа','📈'],['report','Тайлан / Дүгнэлт','📅'],
-  ['eng','Инженерийн гүйцэтгэл','👤'],['faults','Цахилгааны гэмтэл','⚡'],['ref','Лавлах / Тохиргоо','⚙️'],
+  ['eng','Инженерийн гүйцэтгэл','👤'],['faults','Цахилгааны гэмтэл','⚡'],
+  ['parts','Сэлбэгийн нөөц','🔩'],['ref','Лавлах / Тохиргоо','⚙️'],
 ];
 function pages(){const p=[...BASE_PAGES];if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥']);return p;}
 let CUR='dash';
@@ -257,6 +268,7 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='report')v.innerHTML=viewReport();
   else if(CUR==='eng')v.innerHTML=viewEng();
   else if(CUR==='faults')v.innerHTML=viewFaults();
+  else if(CUR==='parts')v.innerHTML=viewParts();
   else if(CUR==='ref')v.innerHTML=viewRef();
   else if(CUR==='users'){v.innerHTML=viewUsers();loadUsers();}
 }
@@ -272,9 +284,10 @@ function viewDash(){const k=kpis();
     ${kpiCard('Нийт ажил',k.total,'accent')}${kpiCard('Хийгдсэн',k.done,'ok')}
     ${kpiCard('Төлөвлөгөөт',k.planned,'teal')}${kpiCard('Төлөвлөгөөт бус',k.unplanned,'warn')}
     ${kpiCard('Эвдрэлтэй (идэвхтэй)',k.activeFaults,'danger','Нийт гэмтэл '+k.faults)}${kpiCard('Тусгаарлалт',k.isoStd+k.isoGrp,'muted','Стандарт '+k.isoStd+' · Групп '+k.isoGrp)}</div>
-  <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
+  <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:12px">
     ${kpiCard('Нээлттэй ажил',k.byStatus['Нээлттэй']||0,'accent')}${kpiCard('Хийгдэж буй',k.byStatus['Хийгдэж буй']||0,'warn')}
-    ${kpiCard('Дууссан',k.byStatus['Дууссан']||0,'ok')}${kpiCard('Цуцлагдсан',k.byStatus['Цуцлагдсан']||0,'muted')}</div>
+    ${kpiCard('Дууссан',k.byStatus['Дууссан']||0,'ok')}${kpiCard('Цуцлагдсан',k.byStatus['Цуцлагдсан']||0,'muted')}
+    ${kpiCard('Шуурхай дуудлага',k.emergency,'danger')}</div>
   <div class="grid kpis" style="margin-bottom:16px">
     ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF (цаг)',k.mtbf,'accent')}
     ${kpiCard('MTTR (мин)',k.mttr,'warn')}${kpiCard('Downtime (мин)',k.down,'danger')}
@@ -365,7 +378,7 @@ function viewEnergy(){const ens=DB.energy.filter(e=>inRange(e.date)).sort((a,b)=
   Object.keys(byDate).sort((a,b)=>a<b?1:-1).forEach(d=>{const arr=byDate[d];let tf=0,te=0;
     arr.forEach(e=>{tf+=+e.feed||0;te+=+e.energy||0;
       rows+=`<tr><td>${e.date}</td><td>${esc(e.shift)}</td><td>${num(e.feed)} мян/тн</td><td>${num(e.energy)} кВт/цаг</td>
-        <td class="t-accent">${unitEnergy(e.energy,e.feed)}</td><td>${esc(e.tezu)||'—'}</td><td><button class="del" onclick="delEnergy(${e.id})">✕</button></td></tr>`;});
+        <td class="t-accent">${unitEnergy(e.energy,e.feed)}</td><td>${esc(e.tezu)||'—'}</td><td>${delBtn(`delEnergy(${e.id})`)}</td></tr>`;});
     rows+=`<tr class="tot"><td>${d}</td><td>Нийт</td><td>${num(tf)} мян/тн</td><td>${num(te)} кВт/цаг</td><td>${unitEnergy(te,tf)}</td><td>—</td><td></td></tr>`;});
   const k=kpis();
   return `<div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
@@ -463,7 +476,7 @@ function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b
       return `<tr><td>${i.date}</td><td>${esc(isoShift(i))}</td><td><span class="badge ${i.type==='Групп'?'b-warn':'b-teal'}">${esc(i.type)}</span></td>
       <td class="t-accent" style="font-family:monospace">${esc(i.equip)}</td><td>${isoStatusCell(i)}</td>
       <td class="muted">${esc(isoPD(i))||'—'}</td><td>${esc(i.by)||'—'}</td><td class="muted" style="max-width:200px">${esc(i.note)||'—'}</td>
-      <td><button class="del" onclick="delIso(${i.id})">✕</button></td></tr>`;}).join('')||'<tr><td colspan="9" style="text-align:center;padding:32px" class="muted">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
+      <td>${delBtn(`delIso(${i.id})`)}</td></tr>`;}).join('')||'<tr><td colspan="9" style="text-align:center;padding:32px" class="muted">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
 let isoCharts=[];
 function drawIsoCharts(){isoCharts.forEach(c=>c.destroy());isoCharts=[];const isos=DB.isolations.filter(i=>inRange(i.date));
   const std=isos.filter(i=>i.type==='Стандарт').length,grp=isos.filter(i=>i.type==='Групп').length;
@@ -492,7 +505,7 @@ function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
       const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
       return `<tr><td class="t-accent" style="font-family:monospace">${esc(e.tag)}</td><td>${esc(e.name)}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(e.pd)||'—'}</td><td class="muted">${esc(e.area)||'—'}</td>
       <td>${esc(e.cat)||'—'}</td><td><span class="badge ${tb}">${esc(e.crit)}</span></td><td>${f}</td>
-      <td><button class="del" onclick="delEquip('${esc(e.tag)}')">✕</button></td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж олдсонгүй.</td></tr>'}</tbody></table></div>`;}
+      <td>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж олдсонгүй.</td></tr>'}</tbody></table></div>`;}
 function refreshEq(v){window._eq=v;document.getElementById('eqResults').innerHTML=eqResultsHTML();}
 function viewEquip(){
   return `${dataListPd()}<div class="glass card" style="margin-bottom:16px">
@@ -615,10 +628,79 @@ function exportFaults(){const rows=[['WO','Tag','Тайлбар','Priority','Roo
   DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(w=>rows.push([w.no,w.equip,w.desc,w.prio,w.root,w.action,downtimeOf(w),w.status,w.date]));
   downloadCSV('Gemtel_'+RANGE.from+'_'+RANGE.to,rows);}
 
+/* ---- СЭЛБЭГИЙН НӨӨЦ ---- */
+function viewParts(){
+  if(!DB.parts)DB.parts=[]; if(!DB.partUsage)DB.partUsage=[];
+  const list=DB.parts;
+  const low=list.filter(p=>+p.qty<=+(p.min||0)).length;
+  const totalUse=DB.partUsage.reduce((s,u)=>s+(+u.qty||0),0);
+  return `<div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+    ${kpiCard('Нийт сэлбэг',list.length,'accent')}${kpiCard('Дуусч буй (≤ хязгаар)',low,'danger')}
+    ${kpiCard('Нийт зарцуулалт',totalUse,'warn')}${kpiCard('Зарцуулалтын бичлэг',DB.partUsage.length,'teal')}</div>
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Сэлбэг нэмэх <span class="badge b-accent" style="margin-left:auto">Excel-ээс импортлох боломжтой</span></div>
+    <form onsubmit="addPart(event)"><div class="col3">
+      <label class="field"><span>Код</span><input id="p_code" placeholder="ж: CBL-25"></label>
+      <label class="field"><span>Нэр *</span><input id="p_name" required placeholder="ж: Кабель 25mm²"></label>
+      <label class="field"><span>Хэмжих нэгж</span><input id="p_unit" placeholder="ш / м / кг" value="ш"></label>
+      <label class="field"><span>Үлдэгдэл (нөөц) *</span><input type="number" step="0.01" id="p_qty" required value="0"></label>
+      <label class="field"><span>Доод хязгаар</span><input type="number" step="0.01" id="p_min" value="0"></label>
+      <div style="display:flex;align-items:end"><button class="btn">Нэмэх</button></div>
+    </div></form>
+    <div class="addbar" style="margin-top:10px">
+      <input type="file" id="p_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importParts(this)">
+      <button class="btn btn-sm btn-ghost" onclick="document.getElementById('p_file').click()">📥 Excel/CSV импортлох</button>
+      <button class="btn btn-sm btn-ghost" onclick="exportParts()">📤 Excel татах</button>
+    </div>
+    <div class="note" style="margin-top:8px">Импортын баганын дараалал: <b>Код · Нэр · Нэгж · Үлдэгдэл · Доод хязгаар</b> (эхний мөр толгой). Эсвэл зөвхөн <b>Нэр · Үлдэгдэл</b> 2 багана байж болно.</div>
+  </div>
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>Код</th><th>Нэр</th><th>Нэгж</th><th>Үлдэгдэл</th><th>Доод хязгаар</th><th>Үйлдэл</th><th></th></tr></thead>
+    <tbody>${list.map(p=>{const lowp=+p.qty<=+(p.min||0);
+      return `<tr><td class="muted" style="font-family:monospace">${esc(p.code)||'—'}</td><td>${esc(p.name)}</td><td>${esc(p.unit)||'ш'}</td>
+      <td><b class="${lowp?'t-danger':'t-ok'}">${num(p.qty)}</b>${lowp?' <span class="badge b-danger" style="font-size:11px">бага</span>':''}</td>
+      <td class="muted">${num(p.min||0)}</td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" style="padding:4px 10px" onclick="usePart(${p.id})">➖ Хасах</button>
+        <button class="btn btn-sm btn-ghost" style="padding:4px 10px" onclick="addStock(${p.id})">➕ Нэмэх</button></td>
+      <td>${delBtn(`delPart(${p.id})`)}</td></tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Сэлбэг алга.</td></tr>'}</tbody></table></div>`;}
+function addPart(e){e.preventDefault();if(!DB.parts)DB.parts=[];if(!DB.seq.part)DB.seq.part=0;
+  DB.parts.push({id:++DB.seq.part,code:val('p_code').trim(),name:val('p_name').trim(),unit:val('p_unit').trim()||'ш',qty:+val('p_qty')||0,min:+val('p_min')||0});
+  save();toast('Сэлбэг нэмэгдлээ ✓');render();}
+function delPart(id){if(!confirm('Энэ сэлбэгийг устгах уу?'))return;DB.parts=DB.parts.filter(p=>p.id!==id);save();render();}
+function usePart(id){const p=DB.parts.find(x=>x.id===id);if(!p)return;
+  const a=prompt('"'+p.name+'" -ээс хэдийг хасах вэ? (одоо '+num(p.qty)+' '+(p.unit||'ш')+')');
+  if(a===null)return;const q=parseFloat(a);if(isNaN(q)||q<=0){toast('Буруу тоо');return;}
+  if(q>+p.qty){toast('Үлдэгдэл хүрэлцэхгүй (одоо '+num(p.qty)+')');return;}
+  p.qty=+p.qty-q;if(!DB.partUsage)DB.partUsage=[];if(!DB.seq.usage)DB.seq.usage=0;
+  DB.partUsage.push({id:++DB.seq.usage,partId:id,date:iso(new Date()),qty:q,by:ME?ME.name:'',note:''});
+  save();toast('Хасагдлаа: '+q+' '+(p.unit||'ш')+' · үлдэгдэл '+num(p.qty));render();}
+function addStock(id){const p=DB.parts.find(x=>x.id===id);if(!p)return;
+  const a=prompt('"'+p.name+'" -д хэдийг нэмэх вэ? (одоо '+num(p.qty)+')');
+  if(a===null)return;const q=parseFloat(a);if(isNaN(q)||q<=0){toast('Буруу тоо');return;}
+  p.qty=+p.qty+q;save();toast('Нэмэгдлээ: +'+q+' · үлдэгдэл '+num(p.qty));render();}
+function exportParts(){const rows=[['Код','Нэр','Нэгж','Үлдэгдэл','Доод хязгаар']];
+  (DB.parts||[]).forEach(p=>rows.push([p.code,p.name,p.unit,p.qty,p.min]));downloadCSV('Selbegiin-nooc',rows);}
+function importParts(input){const f=input.files&&input.files[0];if(!f)return;
+  if(typeof XLSX==='undefined'){toast('Excel сан ачаалагдаагүй — интернэт шалгана уу');return;}
+  const rd=new FileReader();
+  rd.onload=ev=>{try{
+    const wb=XLSX.read(ev.target.result,{type:'binary'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const arr=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(!DB.parts)DB.parts=[];if(!DB.seq.part)DB.seq.part=0;let added=0;
+    arr.forEach((row,i)=>{if(i===0)return;
+      let code='',name='',unit='ш',qty=0,min=0;
+      if(row.length>=4){code=String(row[0]||'').trim();name=String(row[1]||'').trim();unit=String(row[2]||'ш').trim()||'ш';qty=parseFloat(row[3])||0;min=parseFloat(row[4])||0;}
+      else{name=String(row[0]||'').trim();qty=parseFloat(row[1])||0;}
+      if(!name)return;
+      DB.parts.push({id:++DB.seq.part,code,name,unit,qty,min});added++;});
+    save();toast(added+' сэлбэг импортлогдлоо ✓');render();
+  }catch(err){toast('Импортын алдаа — файлын форматыг шалгана уу');}};
+  rd.readAsBinaryString(f);input.value='';}
+
 /* ---- Лавлах ---- */
 function refBlock(title,kind,arr){return `<div class="glass card"><div class="section-title">${title}</div>
     <div class="addbar"><input id="add_${kind}" placeholder="Шинээр нэмэх..."><button class="btn btn-sm" onclick="addRef('${kind}')">Нэмэх</button></div>
-    <div class="chips">${arr.map((x,idx)=>`<span class="chip">${esc(x)}<button class="del" onclick="delRef('${kind}',${idx})">✕</button></span>`).join('')||'<span class="muted" style="font-size:13px">Хоосон</span>'}</div></div>`;}
+    <div class="chips">${arr.map((x,idx)=>`<span class="chip">${esc(x)}${delBtn(`delRef('${kind}',${idx})`)}</span>`).join('')||'<span class="muted" style="font-size:13px">Хоосон</span>'}</div></div>`;}
 function viewRef(){return `<div class="grid col2" style="margin-bottom:12px">
     ${refBlock('📍 Байршил','areas',DB.areas)}${refBlock('🔧 Ажлын төрөл','types',DB.types)}
     ${refBlock('👤 Хариуцсан инженер','engineers',DB.engineers)}${refBlock('🔒 Тусгаарлалт хийсэн хүн','isoPersons',DB.isoPersons)}</div>
