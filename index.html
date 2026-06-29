@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Цахилгаан">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
   :root{--base:#0b1020;--panel:#121a2e;--panel2:#172139;--line:#243049;
     --accent:#2e8bff;--teal:#1ec8c8;--ok:#2fd07a;--warn:#ffb020;--danger:#ff4d4f;--muted:#8ea2c0;--text:#e6edf7;}
@@ -704,18 +704,19 @@ function importParts(input){const f=input.files&&input.files[0];if(!f)return;
 
 /* ---- QR код / Дижитал паспорт / Үзлэг ---- */
 function qrUrl(tag){return location.origin+'/?eq='+encodeURIComponent(tag);}
-async function printAllQR(){if(typeof QRCode==='undefined'){toast('QR сан ачаалагдаагүй — интернэт шалгана уу');return;}
-  const list=(typeof eqFiltered==='function'?eqFiltered():DB.equip).slice(0,200);
+function qrDataUrl(text,cell){const q=qrcode(0,'M');q.addData(text);q.make();return q.createDataURL(cell||4,8);}
+function printAllQR(){if(typeof qrcode==='undefined'){toast('QR сан ачаалагдаагүй — интернэт шалгана уу');return;}
+  const list=(typeof eqFiltered==='function'?eqFiltered():DB.equip).slice(0,300);
   if(!list.length){toast('Тоног алга');return;}
   toast('QR код бэлдэж байна… ('+list.length+')');
   const cells=[];
-  for(const e of list){const d=await QRCode.toDataURL(qrUrl(e.tag),{width:140,margin:1});
+  for(const e of list){const d=qrDataUrl(qrUrl(e.tag),4);
     cells.push('<div class="qrcell"><img src="'+d+'"><div class="t">'+esc(e.tag)+'</div><div class="n">'+esc(e.name||'')+'</div></div>');}
   const w=window.open('','_blank');if(!w){toast('Popup зөвшөөрнө үү');return;}
   w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>QR кодууд</title><style>body{font-family:sans-serif;margin:10px}h3{margin:4px 0 10px}.grid{display:flex;flex-wrap:wrap;gap:8px}.qrcell{border:1px solid #999;border-radius:6px;padding:6px;width:160px;text-align:center;page-break-inside:avoid}.qrcell img{width:140px;height:140px}.qrcell .t{font-weight:700;font-size:13px;font-family:monospace;margin-top:2px}.qrcell .n{font-size:10px;color:#444;height:26px;overflow:hidden}</style></head><body><h3>Тоног төхөөрөмжийн QR кодууд ('+cells.length+')</h3><div class="grid">'+cells.join('')+'</div></body></html>');
   w.document.close();w.focus();setTimeout(function(){w.print();},700);}
-async function showEqQR(tag){if(typeof QRCode==='undefined'){toast('QR сан алга');return;}
-  const d=await QRCode.toDataURL(qrUrl(tag),{width:300,margin:2});const e=DB.equip.find(x=>x.tag===tag)||{};
+function showEqQR(tag){if(typeof qrcode==='undefined'){toast('QR сан алга');return;}
+  const d=qrDataUrl(qrUrl(tag),8);const e=DB.equip.find(x=>x.tag===tag)||{};
   const w=window.open('','_blank');if(!w){toast('Popup зөвшөөрнө үү');return;}
   w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>QR '+esc(tag)+'</title></head><body style="text-align:center;font-family:sans-serif;padding:20px"><h2 style="font-family:monospace">'+esc(tag)+'</h2><div>'+esc(e.name||'')+'</div><img src="'+d+'" style="width:300px;margin-top:10px"><p style="font-size:11px;color:#777">'+esc(qrUrl(tag))+'</p></body></html>');
   w.document.close();w.focus();setTimeout(function(){w.print();},400);}
