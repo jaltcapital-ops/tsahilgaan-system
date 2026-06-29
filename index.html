@@ -335,7 +335,7 @@ function drawCharts(){destroyCharts();const t=trend(),tc=workTypeCounts(),te=top
 }
 
 /* ---- Шинэ мэдээ ---- */
-function viewNew(){return `${dataListEquip()}${dataListPd()}<form onsubmit="saveReport(event)" style="max-width:900px">
+function viewNew(){window._newPhotos=[];return `${dataListEquip()}${dataListPd()}<form onsubmit="saveReport(event)" style="max-width:900px">
   <div class="glass card" style="margin-bottom:16px">
     <div class="section-title">🗓️ Ерөнхий мэдээлэл <span class="badge b-accent" style="margin-left:auto">Авто дугаар + timestamp</span></div>
     <div class="col3">
@@ -363,6 +363,9 @@ function viewNew(){return `${dataListEquip()}${dataListPd()}<form onsubmit="save
         <label class="field"><span>Root Cause</span><input id="w_root"></label>
         <label class="field"><span>Action Taken</span><input id="w_action"></label></div>
     </div>
+    <label class="field" style="grid-column:span 3;margin-top:6px"><span>📷 Зураг хавсаргах (камер / файл — олон зураг)</span>
+      <input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)">
+      <div id="photoPrev" style="margin-top:6px"></div></label>
     <div class="note" style="margin-top:12px">Авто тооцоо: Downtime = <b id="downPrev">— (Start/Finish оруулна уу)</b> · Эгзэгтэй/Өндөр гэмтэл бол Telegram мэдэгдэл илгээнэ.</div>
   </div>
   <button class="btn">Хадгалах</button></form>`;}
@@ -377,11 +380,11 @@ function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:rid,date:val('f_date'),
       equip,pd:val('w_pd'),area:val('w_area'),type:val('w_type'),prio,status:val('w_status'),
       desc,fault:isFault,fstate:isFault?'Эвдрэлтэй':'',root:val('w_root'),action:val('w_action'),
-      start:(s||(isFault?new Date().toISOString().slice(0,16):'')),finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng')});
+      start:(s||(isFault?new Date().toISOString().slice(0,16):'')),finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng'),photos:(window._newPhotos||[]).slice()});
     if(isFault){
       notify('⚡ ГЭМТЭЛ бүртгэгдлээ ('+(prio||'—')+')\nТоног: '+(equip||'—')+'\nТайлбар: '+desc+'\nОгноо: '+val('f_date')+' ('+val('f_shift')+' ээлж) · '+(ME?ME.name:''));}
   }
-  save();toast('Хадгалагдлаа ✓ ('+no+')');go('dash');}
+  window._newPhotos=[];save();toast('Хадгалагдлаа ✓ ('+no+')');go('dash');}
 
 /* ---- Эрчим хүч ---- */
 function viewEnergy(){const ens=DB.energy.filter(e=>inRange(e.date)).sort((a,b)=>a.date<b.date?1:-1);
@@ -536,7 +539,9 @@ function viewEquip(){
   <div id="eqResults">${eqResultsHTML()}</div>`;}
 function addEquip(e){e.preventDefault();const tag=val('e_tag').trim();
   if(DB.equip.some(x=>x.tag===tag)){toast('Энэ TAG бүртгэлтэй');return;}
-  DB.equip.push({tag,name:val('e_name').trim(),pd:val('e_pd').trim(),cat:val('e_cat').trim(),area:val('e_area'),crit:val('e_crit')});save();toast('Нэмэгдэж хадгалагдлаа ✓');render();}
+  DB.equip.push({tag,name:val('e_name').trim(),pd:val('e_pd').trim(),cat:val('e_cat').trim(),area:val('e_area'),crit:val('e_crit')});save();
+  toast('Нэмэгдлээ ✓ — QR автоматаар үүслээ');
+  if(confirm(tag+' нэмэгдлээ. QR кодыг нь одоо харах уу? (хэвлэхэд бэлэн)'))showEqQR(tag);else render();}
 function delEquip(tag){if(!confirm(tag+' -ийг устгах уу?'))return;DB.equip=DB.equip.filter(e=>e.tag!==tag);save();render();}
 function exportEquip(){const rows=[['TAG','Нэр','PD','Байршил','Ангилал','Эгзэгтэй байдал']];
   DB.equip.forEach(e=>rows.push([e.tag,e.name,e.pd||'',e.area,e.cat,e.crit]));downloadCSV('Tonog-tohooromj',rows);}
@@ -631,11 +636,12 @@ function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&inRange(w.date)).sort
     <button class="btn btn-sm" style="margin-left:10px" onclick="go('new')">➕ Гэмтэл бүртгэх</button></div>
   ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportFaults()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
-    <thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>Priority</th><th>Root Cause</th><th>Downtime</th><th>Гэмтлийн төлөв</th></tr></thead>
+    <thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>📷</th><th>Priority</th><th>Root Cause</th><th>Downtime</th><th>Гэмтлийн төлөв</th></tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td><td>${esc(w.equip)}</td>
-      <td style="max-width:240px">${esc(w.desc)}</td><td><span class="badge ${w.prio==='Эгзэгтэй'?'b-danger':w.prio==='Өндөр'?'b-warn':'b-accent'}">${esc(w.prio)}</span></td>
+      <td style="max-width:240px">${esc(w.desc)}</td><td>${photoThumbs(w.photos)}</td><td><span class="badge ${w.prio==='Эгзэгтэй'?'b-danger':w.prio==='Өндөр'?'b-warn':'b-accent'}">${esc(w.prio)}</span></td>
       <td class="muted">${esc(w.root)||'—'}</td><td>${downtimeOf(w)} мин</td>
-      <td>${woStatusCell(w)}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Гэмтэл алга.</td></tr>'}</tbody></table></div>`;}
+      <td>${woStatusCell(w)}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Гэмтэл алга.</td></tr>'}</tbody></table></div>`;}
+function photoThumbs(ph){if(!ph||!ph.length)return '<span class="muted">—</span>';return ph.map(d=>'<img src="'+d+'" style="height:32px;border-radius:4px;cursor:zoom-in;margin:1px" onclick="showImgFromEl(this)">').join('');}
 function exportFaults(){const rows=[['WO','Tag','Тайлбар','Priority','Root Cause','Action Taken','Downtime(мин)','Статус','Огноо']];
   DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(w=>rows.push([w.no,w.equip,w.desc,w.prio,w.root,w.action,downtimeOf(w),w.status,w.date]));
   downloadCSV('Gemtel_'+RANGE.from+'_'+RANGE.to,rows);}
@@ -760,6 +766,7 @@ function viewPdPassport(){const pd=window._pdTag;
       ${kpiCard('Холбоотой тоног',equips.length,'accent')}${kpiCard('Нийт ажил',works.length,'teal')}
       ${kpiCard('Гэмтэл',faults.length,'danger')}${kpiCard('Идэвхтэй гэмтэл',works.filter(isActiveFault).length,'warn')}</div>
     <div style="margin-top:14px"><button class="btn" onclick="prefillNewPd('${esc(pd)}')">⚡ Ажил/гэмтэл бүртгэх</button></div></div>
+  ${quickCheckForm(pd,'pd')}
   <div class="glass card" style="margin-bottom:16px"><div class="section-title">📦 Холбоотой тоног төхөөрөмж</div>
     <div style="overflow:auto"><table><thead><tr><th>TAG</th><th>Нэр</th><th>Эгзэгтэй</th></tr></thead>
     <tbody>${equips.map(e=>`<tr><td class="t-accent" style="font-family:monospace;cursor:pointer;text-decoration:underline" onclick="openPassport('${esc(e.tag)}')">${esc(e.tag)}</td><td>${esc(e.name)}</td><td>${esc(e.crit||'—')}</td></tr>`).join('')||'<tr><td colspan="3" class="muted" style="text-align:center;padding:18px">Холбоотой тоног алга — тоног дээр PD дугаараа оруулна уу.</td></tr>'}</tbody></table></div></div>
@@ -767,6 +774,37 @@ function viewPdPassport(){const pd=window._pdTag;
     <div style="overflow:auto"><table><thead><tr><th>Огноо</th><th>TAG</th><th>Тайлбар</th><th>Төлөв</th></tr></thead>
     <tbody>${works.slice(0,30).map(w=>`<tr><td>${w.date}</td><td>${esc(w.equip)}</td><td style="max-width:280px">${esc(w.desc)}</td>
       <td>${w.fault?`<span class="badge ${faultBadge(faultState(w))}">${esc(faultState(w))}</span>`:`<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Бүртгэл алга.</td></tr>'}</tbody></table></div></div>`;}
+function quickCheckForm(target,kind){return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">✅ Шуурхай үзлэг (QR)</div>
+    <form onsubmit="saveQuickCheck(event,'${esc(target)}','${kind}')"><div class="col3">
+      <label class="field"><span>Хэвийн эсэх?</span><select id="qc_normal"><option value="✅">✅ Хэвийн</option><option value="❌">❌ Хэвийн бус</option></select></label>
+      <label class="field"><span>Гэмтэл илэрсэн үү?</span><select id="qc_fault" onchange="document.getElementById('qc_dw').style.display=this.value==='Тийм'?'block':'none'"><option>Үгүй</option><option>Тийм</option></select></label>
+      <label class="field" id="qc_dw" style="display:none"><span>Гэмтлийн тайлбар</span><input id="qc_fdesc" placeholder="юу эвдэрсэн бэ"></label>
+    </div><label class="field" style="margin-top:10px"><span>Тайлбар (1 мөр)</span><input id="qc_note"></label>
+    <div style="margin-top:12px"><button class="btn">Хадгалах</button>
+      <span class="muted" style="font-size:12px;margin-left:10px">Гэмтэлтэй бол автоматаар "Цахилгааны гэмтэл"-д бүртгэгдэж, Telegram-д мэдэгдэнэ.</span></div></form></div>`;}
+function saveQuickCheck(e,target,kind){e.preventDefault();
+  const normal=val('qc_normal'),fault=val('qc_fault'),fdesc=val('qc_fdesc'),note=val('qc_note');
+  if(!DB.inspections)DB.inspections=[];if(!DB.seq.inspection)DB.seq.inspection=0;if(!DB.seq.wo)DB.seq.wo=0;
+  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',
+    results:[{item:'Хэвийн байдал',status:normal==='✅'?'OK':'Анхаарах',note:''}],overall:(normal==='❌'||fault==='Тийм')?'Анхаарах':'OK',note:note});
+  if(fault==='Тийм'){const now=new Date().toISOString().slice(0,16);
+    const eqp=kind==='equip'?target:'';const pdv=kind==='pd'?target:((DB.equip.find(x=>x.tag===target)||{}).pd||'');
+    DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:null,date:iso(new Date()),
+      equip:eqp||target,pd:pdv,area:'',type:'Шуурхай дуудлага',prio:'Өндөр',status:'Нээлттэй',
+      desc:fdesc||note||((kind==='pd'?'PD ':'')+target+' дээр гэмтэл илэрсэн'),fault:true,fstate:'Эвдрэлтэй',
+      root:'',action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:[]});
+    notify('⚡ ГЭМТЭЛ илэрлээ (QR шуурхай үзлэг)\n'+(kind==='pd'?'PD: ':'Тоног: ')+target+'\nТайлбар: '+(fdesc||note||'—')+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
+    save();toast('Гэмтэл бүртгэгдэж, Telegram-д мэдэгдлээ ✓');}
+  else{save();toast('Үзлэг хадгалагдлаа ✓ ('+(normal==='✅'?'Хэвийн':'Анхаарах')+')');}
+  render();}
+function compressImg(file,cb){const r=new FileReader();r.onload=ev=>{const img=new Image();img.onload=()=>{const max=900;let w=img.width,h=img.height;
+    if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
+    const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL('image/jpeg',0.55));};img.src=ev.target.result;};r.readAsDataURL(file);}
+function handlePhotos(input){const files=Array.from(input.files||[]);if(!window._newPhotos)window._newPhotos=[];
+  files.forEach(f=>compressImg(f,d=>{if(window._newPhotos.length<6){window._newPhotos.push(d);renderPhotoPrev();}}));input.value='';}
+function renderPhotoPrev(){const el=document.getElementById('photoPrev');if(!el)return;
+  el.innerHTML=(window._newPhotos||[]).map((d,i)=>'<div style="position:relative;display:inline-block;margin:4px"><img src="'+d+'" style="height:70px;border-radius:6px;cursor:zoom-in" onclick="showImgFromEl(this)"><button type="button" class="del" style="position:absolute;top:-6px;right:-6px;background:#000;border-radius:50%;font-size:13px" onclick="window._newPhotos.splice('+i+',1);renderPhotoPrev()">✕</button></div>').join('');}
+function showImgFromEl(el){const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;display:grid;place-items:center;cursor:zoom-out';o.onclick=function(){o.remove();};const im=document.createElement('img');im.src=el.src;im.style.cssText='max-width:94vw;max-height:94vh;border-radius:8px';o.appendChild(im);document.body.appendChild(o);}
 function viewPassport(){const tag=window._eqTag;const e=DB.equip.find(x=>x.tag===tag)||{tag:tag,name:'(бүртгэлгүй)'};
   const works=DB.wos.filter(w=>w.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
   const faults=works.filter(w=>w.fault);const insp=(DB.inspections||[]).filter(i=>i.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
@@ -783,6 +821,7 @@ function viewPassport(){const tag=window._eqTag;const e=DB.equip.find(x=>x.tag==
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" onclick="openInspectFor('${esc(tag)}')">✅ Үзлэг хийх</button>
       <button class="btn btn-ghost" onclick="prefillNew('${esc(tag)}')">⚡ Ажил/гэмтэл бүртгэх</button></div></div>
+  ${quickCheckForm(tag,'equip')}
   <div class="glass card" style="margin-bottom:16px"><div class="section-title">📋 Ажил / гэмтлийн түүх</div>
     <div style="overflow:auto"><table><thead><tr><th>Огноо</th><th>Төрөл</th><th>Тайлбар</th><th>Төлөв</th></tr></thead>
     <tbody>${works.slice(0,30).map(w=>`<tr><td>${w.date}</td><td>${esc(w.type)}</td><td style="max-width:280px">${esc(w.desc)}</td>
