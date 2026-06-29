@@ -84,6 +84,12 @@
   .toolbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap}
   .report-body h2{font-size:15px;margin:18px 0 8px} .report-body p{line-height:1.7;color:var(--text)}
   .report-body ul{margin:6px 0 0 0;padding-left:18px} .report-body li{margin:4px 0;line-height:1.6}
+  .qrgrid{display:flex;flex-wrap:wrap;gap:8px}
+  .qrcell{border:1px solid var(--line);border-radius:8px;padding:6px;width:150px;text-align:center;background:#fff}
+  .qrcell img{width:130px;height:130px;display:block;margin:0 auto}
+  .qrcell .t{font-weight:700;font-size:12px;font-family:monospace;color:#111;margin-top:2px}
+  .qrcell .n{font-size:10px;color:#444;height:24px;overflow:hidden}
+  @media print{aside,header,.toolbar,.seg,#qrs{display:none!important} body{background:#fff} .content{padding:0} .glass{background:#fff!important;border:none!important;box-shadow:none!important}}
 </style>
 </head>
 <body>
@@ -248,7 +254,7 @@ const BASE_PAGES=[
   ['iso','Тусгаарлалт / PD','🔒'],['equip','Тоног төхөөрөмж','📦'],
   ['reliab','Найдвартай ажиллагаа','📈'],['report','Тайлан / Дүгнэлт','📅'],
   ['eng','Инженерийн гүйцэтгэл','👤'],['faults','Цахилгааны гэмтэл','⚡'],
-  ['parts','Сэлбэгийн нөөц','🔩'],['inspect','Үзлэг (QR)','✅'],['ref','Лавлах / Тохиргоо','⚙️'],
+  ['parts','Сэлбэгийн нөөц','🔩'],['inspect','Үзлэг (QR)','✅'],['qr','QR кодууд','🔲'],['ref','Лавлах / Тохиргоо','⚙️'],
 ];
 function pages(){const p=[...BASE_PAGES];if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥']);return p;}
 let CUR='dash';
@@ -272,6 +278,8 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='parts')v.innerHTML=viewParts();
   else if(CUR==='inspect')v.innerHTML=viewInspect();
   else if(CUR==='passport')v.innerHTML=viewPassport();
+  else if(CUR==='pdpass')v.innerHTML=viewPdPassport();
+  else if(CUR==='qr')v.innerHTML=viewQR();
   else if(CUR==='ref')v.innerHTML=viewRef();
   else if(CUR==='users'){v.innerHTML=viewUsers();loadUsers();}
 }
@@ -523,7 +531,7 @@ function viewEquip(){
       <div style="grid-column:span 3;display:flex;align-items:end"><button class="btn">Нэмэх</button></div></div></form></div>
   <div class="glass card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center">
     🔍 <input id="eq" value="${esc(window._eq||'')}" placeholder="TAG, нэр, PD-аар хайх…" oninput="refreshEq(this.value)">
-    <button class="btn btn-sm btn-ghost" onclick="printAllQR()">🔲 QR хэвлэх</button>
+    <button class="btn btn-sm btn-ghost" onclick="go('qr')">🔲 QR кодууд</button>
     <button class="btn btn-sm btn-ghost" onclick="exportEquip()">📤 Excel</button></div>
   <div id="eqResults">${eqResultsHTML()}</div>`;}
 function addEquip(e){e.preventDefault();const tag=val('e_tag').trim();
@@ -723,6 +731,42 @@ function showEqQR(tag){if(typeof qrcode==='undefined'){toast('QR сан алга
 function openPassport(tag){window._eqTag=tag;go('passport');}
 function prefillNew(tag){go('new');setTimeout(function(){const el=document.getElementById('w_equip');if(el)el.value=tag;},60);}
 function openInspectFor(tag){window._inspectEquip=tag;go('inspect');}
+function viewQR(){if(typeof qrcode==='undefined')return '<div class="note">QR сан ачаалагдаагүй — интернэт холболтоо шалгаад хуудсыг дахин ачаална уу (F5).</div>';
+  const mode=window._qrMode||'equip';const q=(window._qrSearch||'').toLowerCase();let items;
+  if(mode==='pd'){items=(DB.pdList||[]).filter(p=>!q||p.toLowerCase().includes(q)).map(p=>({tag:p,name:'PD дугаар',url:location.origin+'/?pd='+encodeURIComponent(p)}));}
+  else{items=(DB.equip||[]).filter(e=>!q||(e.tag+' '+(e.name||'')).toLowerCase().includes(q)).map(e=>({tag:e.tag,name:e.name||'',url:qrUrl(e.tag)}));}
+  const shown=items.slice(0,300);
+  return `<div class="glass card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div class="seg"><button class="${mode==='equip'?'on':''}" onclick="window._qrMode='equip';render()">📦 Тоног QR</button><button class="${mode==='pd'?'on':''}" onclick="window._qrMode='pd';render()">🔌 PD QR</button></div>
+    <input id="qrs" value="${esc(window._qrSearch||'')}" placeholder="Хайх…" oninput="window._qrSearch=this.value;render()" style="max-width:240px">
+    <span class="muted" style="font-size:12px">${items.length} ширхэг${items.length>300?' (эхний 300 — хайлтаар нарийсга)':''}</span>
+    <button class="btn btn-sm" style="margin-left:auto" onclick="window.print()">🖨 Хэвлэх / PDF хадгалах</button></div>
+  <div class="note" style="margin-bottom:12px">QR кодууд доор шууд харагдана. "🖨 Хэвлэх" дарж наалт цаасан дээр хэвлэх эсвэл PDF болгож хадгална. Уншуулахад ${mode==='pd'?'тухайн PD дугаарын':'тухайн тоноглолын'} хуудас нээгдэнэ.</div>
+  <div id="qrprint" class="glass card"><div class="qrgrid">${shown.map(it=>`<div class="qrcell"><img src="${qrDataUrl(it.url,4)}"><div class="t">${esc(it.tag)}</div><div class="n">${esc(it.name)}</div></div>`).join('')||'<div class="muted" style="padding:20px">Алга байна — тоног/PD нэмнэ үү.</div>'}</div></div>`;}
+function openPdPassport(pd){window._pdTag=pd;go('pdpass');}
+function prefillNewPd(pd){go('new');setTimeout(function(){const el=document.getElementById('w_pd');if(el)el.value=pd;},60);}
+function showPdQR(pd){if(typeof qrcode==='undefined'){toast('QR сан алга');return;}
+  const d=qrDataUrl(location.origin+'/?pd='+encodeURIComponent(pd),8);
+  const w=window.open('','_blank');if(!w){toast('Popup хаагдсан — "QR кодууд" цэсээс хэвлэнэ үү');return;}
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>PD '+esc(pd)+'</title></head><body style="text-align:center;font-family:sans-serif;padding:20px"><h2 style="font-family:monospace">🔌 '+esc(pd)+'</h2><img src="'+d+'" style="width:300px"></body></html>');
+  w.document.close();w.focus();setTimeout(function(){w.print();},400);}
+function viewPdPassport(){const pd=window._pdTag;
+  const equips=DB.equip.filter(e=>e.pd===pd);const works=DB.wos.filter(w=>w.pd===pd).sort((a,b)=>a.date<b.date?1:-1);const faults=works.filter(w=>w.fault);
+  return `<div class="glass card" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="font-size:22px;font-weight:700;font-family:monospace" class="t-teal">🔌 ${esc(pd)}</div><span class="muted">PD дугаар (тэжээлийн цэг)</span>
+      <button class="btn btn-sm" style="margin-left:auto" onclick="showPdQR('${esc(pd)}')">🔲 QR хэвлэх</button></div>
+    <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:14px">
+      ${kpiCard('Холбоотой тоног',equips.length,'accent')}${kpiCard('Нийт ажил',works.length,'teal')}
+      ${kpiCard('Гэмтэл',faults.length,'danger')}${kpiCard('Идэвхтэй гэмтэл',works.filter(isActiveFault).length,'warn')}</div>
+    <div style="margin-top:14px"><button class="btn" onclick="prefillNewPd('${esc(pd)}')">⚡ Ажил/гэмтэл бүртгэх</button></div></div>
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title">📦 Холбоотой тоног төхөөрөмж</div>
+    <div style="overflow:auto"><table><thead><tr><th>TAG</th><th>Нэр</th><th>Эгзэгтэй</th></tr></thead>
+    <tbody>${equips.map(e=>`<tr><td class="t-accent" style="font-family:monospace;cursor:pointer;text-decoration:underline" onclick="openPassport('${esc(e.tag)}')">${esc(e.tag)}</td><td>${esc(e.name)}</td><td>${esc(e.crit||'—')}</td></tr>`).join('')||'<tr><td colspan="3" class="muted" style="text-align:center;padding:18px">Холбоотой тоног алга — тоног дээр PD дугаараа оруулна уу.</td></tr>'}</tbody></table></div></div>
+  <div class="glass card"><div class="section-title">📋 Ажил / гэмтлийн түүх</div>
+    <div style="overflow:auto"><table><thead><tr><th>Огноо</th><th>TAG</th><th>Тайлбар</th><th>Төлөв</th></tr></thead>
+    <tbody>${works.slice(0,30).map(w=>`<tr><td>${w.date}</td><td>${esc(w.equip)}</td><td style="max-width:280px">${esc(w.desc)}</td>
+      <td>${w.fault?`<span class="badge ${faultBadge(faultState(w))}">${esc(faultState(w))}</span>`:`<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Бүртгэл алга.</td></tr>'}</tbody></table></div></div>`;}
 function viewPassport(){const tag=window._eqTag;const e=DB.equip.find(x=>x.tag===tag)||{tag:tag,name:'(бүртгэлгүй)'};
   const works=DB.wos.filter(w=>w.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
   const faults=works.filter(w=>w.fault);const insp=(DB.inspections||[]).filter(i=>i.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
@@ -850,7 +894,7 @@ function startApp(){document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('who').textContent=ME.name;document.getElementById('whoRole').textContent=roleLabel(ME.role);
   renderNav();renderPresets();syncDates();render();
-  try{const eq=new URLSearchParams(location.search).get('eq');if(eq){openPassport(eq);}}catch(e){}}
+  try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}}catch(e){}}
 async function init(){if(!TOKEN)return;
   try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
   catch{localStorage.removeItem('tk');TOKEN=null;}}
