@@ -141,7 +141,6 @@ let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
   fetch('/api/data',{method:'PUT',headers:jsonHdr(),body:JSON.stringify(DB)})
     .then(r=>{if(!r.ok)r.json().then(e=>toast(e.error||'Хадгалах алдаа гарлаа'));});},250);}
-function saveNow(){clearTimeout(saveT);return fetch('/api/data',{method:'PUT',headers:jsonHdr(),body:JSON.stringify(DB)}).then(r=>{if(!r.ok)return r.json().then(e=>{toast(e.error||'Хадгалах алдаа');});}).catch(()=>{});}
 function notify(text){fetch('/api/notify',{method:'POST',headers:jsonHdr(),body:JSON.stringify({text})})
   .then(r=>r.json()).then(d=>{if(d&&d.ok)toast('Telegram мэдэгдэл илгээгдлээ ✓');}).catch(()=>{});}
 
@@ -151,12 +150,10 @@ const ISO_TYPES=['Стандарт','Групп'];
 const ISO_STATUS=['Тусгаарласан','Сэргээсэн','Шилжүүлсэн'];
 const FAULT_STATES=['Эвдрэлтэй','Засварлаж байгаа','Засварласан'];
 const SHIFT_DN=['Өдөр','Шөнө'];
-const ROLES=[['ADMIN','Админ'],['CHIEF','Цахилгааны ахлах инженер'],['MASTER','Цахилгааны мастер'],['EE','Цахилгааны инженер'],['ISO_TECH','Цахилгаан тусгаарлалтын техникч'],['ELEC','Цахилгаанчин'],['ELEC_ASST','Туслах цахилгаанчин'],['AUTO_CHIEF','Автоматжуулалтын ахлах инженер'],['AUTO_EE','Автоматжуулалтын инженер'],['AUTO_TECH','Автоматжуулалтын техникч'],['VIEWER','Үзэгч']];
+const ROLES=[['ADMIN','Админ'],['CHIEF','Ахлах инженер'],['MASTER','Цахилгааны мастер'],['EE','Цахилгааны инженер'],['TECH','Техникч'],['ISO_TECH','Тусгаарлалтын техникч'],['ELEC','Цахилгаанчин'],['ELEC_ASST','Туслах цахилгаанчин'],['AUTO_CHIEF','Автоматжуулалтын ахлах инженер'],['AUTO_TECH','Автоматжуулалтын техникч'],['VIEWER','Үзэгч']];
 const roleLabel=r=>(ROLES.find(x=>x[0]===r)||[r,r])[1];
-const SHIFTS=['А','Б','В','Г'];
-// Эрхийн хяналт: ажил/гэмтлийн статусыг ахлах/мастер/инженер нар өөрчилнө
-const WO_EDIT_ROLES=['ADMIN','CHIEF','MASTER','EE','AUTO_CHIEF','AUTO_EE'];
-const canEditWoStatus=()=>ME&&WO_EDIT_ROLES.includes(ME.role);
+// Эрхийн хяналт: ажлын статусыг зөвхөн Админ + Цахилгааны мастер өөрчилнө
+const canEditWoStatus=()=>ME&&(ME.role==='ADMIN'||ME.role==='MASTER');
 // Тусгаарлалтын төлөвийг зөвхөн Тусгаарлалтын техникч (+Админ) өөрчилнө
 const canEditIsoStatus=()=>ME&&(ME.role==='ADMIN'||ME.role==='ISO_TECH');
 // Мэдээлэл устгахыг зөвхөн Админ хийнэ
@@ -257,8 +254,7 @@ const BASE_PAGES=[
   ['iso','Тусгаарлалт / PD','🔒'],['equip','Тоног төхөөрөмж','📦'],
   ['reliab','Найдвартай ажиллагаа','📈'],['report','Тайлан / Дүгнэлт','📅'],
   ['eng','Инженерийн гүйцэтгэл','👤'],['faults','Цахилгааны гэмтэл','⚡'],
-  ['parts','Сэлбэгийн нөөц','🔩'],['inspect','Үзлэг (QR)','✅'],['qr','QR кодууд','🔲'],
-  ['hr','Хүний нөөц / Ээлж','🧑‍🔧'],['ref','Лавлах / Тохиргоо','⚙️'],
+  ['parts','Сэлбэгийн нөөц','🔩'],['inspect','Үзлэг (QR)','✅'],['qr','QR кодууд','🔲'],['ref','Лавлах / Тохиргоо','⚙️'],
 ];
 function pages(){const p=[...BASE_PAGES];if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥']);return p;}
 let CUR='dash';
@@ -284,7 +280,6 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='passport')v.innerHTML=viewPassport();
   else if(CUR==='pdpass')v.innerHTML=viewPdPassport();
   else if(CUR==='qr')v.innerHTML=viewQR();
-  else if(CUR==='hr')v.innerHTML=viewHR();
   else if(CUR==='ref')v.innerHTML=viewRef();
   else if(CUR==='users'){v.innerHTML=viewUsers();loadUsers();}
 }
@@ -308,7 +303,6 @@ function viewDash(){const k=kpis();
     ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF (цаг)',k.mtbf,'accent')}
     ${kpiCard('MTTR (мин)',k.mttr,'warn')}${kpiCard('Downtime (мин)',k.down,'danger')}
     ${kpiCard('Ажилласан цаг',k.workHours,'teal','Хүн тоо × 12ц')}${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}</div>
-  ${activeFaultsPanel()}
   <div class="grid col3" style="grid-template-columns:2fr 1fr;margin-bottom:16px">
     <div class="glass card"><div class="section-title">📈 Өдрийн чиг хандлага — ажил &amp; гэмтэл</div><canvas id="cTrend" height="110"></canvas></div>
     <div class="glass card"><div class="section-title">🔧 Ажлын төрөл тус бүрийн тоо</div><canvas id="cType" height="160"></canvas><div id="typeNums" style="margin-top:10px;font-size:13px"></div></div></div>
@@ -317,13 +311,6 @@ function viewDash(){const k=kpis();
     <div class="glass card"><div class="section-title">🏭 Эвдрэлтэй төхөөрөмж (идэвхтэй)</div><canvas id="cTop" height="120"></canvas></div></div>
   <div class="glass card"><div class="section-title">🔋 Нэгж бүтээгдэхүүнд зарцуулсан эрчим хүч (кВт/цаг)</div><canvas id="cEnergy" height="90"></canvas></div>`;
 }
-function activeFaultsPanel(){const af=DB.wos.filter(isActiveFault).sort((a,b)=>a.date<b.date?1:-1);
-  return `<div class="glass card" style="margin-bottom:16px;${af.length?'border:1px solid rgba(255,77,79,.5)':''}">
-    <div class="section-title">⚡ Идэвхтэй гэмтэл — засагдаагүй (авто) <span class="badge ${af.length?'b-danger':'b-ok'}" style="margin-left:auto">${af.length}</span></div>
-    ${af.length?`<div style="overflow:auto"><table><thead><tr><th>Tag / PD</th><th>Тайлбар</th><th>📷</th><th>Огноо</th><th>Гэмтлийн төлөв</th></tr></thead><tbody>
-      ${af.map(w=>`<tr><td class="t-accent" style="font-family:monospace">${esc(w.equip||w.pd)||'—'}</td><td style="max-width:300px">${esc(w.desc)}</td><td>${photoThumbs(w.photos)}</td><td class="muted" style="font-size:12px">${w.date}</td><td>${woStatusCell(w)}</td></tr>`).join('')}
-      </tbody></table></div><div class="note" style="margin-top:8px">Төлвийг "Засварласан" болгоход энэ жагсаалт болон дашбордоос автоматаар арилна.</div>`
-      :'<div class="muted" style="padding:10px">Идэвхтэй гэмтэл алга — бүх төхөөрөмж хэвийн ✓</div>'}</div>`;}
 let charts=[];
 function destroyCharts(){charts.forEach(c=>c.destroy());charts=[];}
 function baseOpts(extra={}){const tick='#8ea2c0',gridC='#243049';
@@ -454,8 +441,7 @@ function woStatusCell(w){
     return `<span class="badge ${faultBadge(st)}">${esc(st)}</span>`;}
   if(canEditWoStatus())return `<select onchange="setWoStatus(${w.id},this.value)" style="padding:4px 6px;font-size:12px;width:auto">${STATUSES.map(s=>`<option ${s===w.status?'selected':''}>${esc(s)}</option>`).join('')}</select>`;
   return `<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`;}
-function refreshAfterWo(){if(document.getElementById('wtable'))renderWorkTable();else render();}
-function setWoStatus(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.status=val;save();toast('Статус шинэчлэгдлээ ✓');refreshAfterWo();}
+function setWoStatus(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.status=val;save();toast('Статус шинэчлэгдлээ ✓');renderWorkTable();}
 function setWoFaultState(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.fstate=val;
   if(val==='Засварласан'){
     if(!w.finish)w.finish=new Date().toISOString().slice(0,16);            // цаг авто зогсоох
@@ -463,7 +449,7 @@ function setWoFaultState(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;
     w.status='Дууссан';
   }else if(val==='Засварлаж байгаа'){w.status='Хийгдэж буй';}
   else{w.status='Нээлттэй';}
-  save();toast('Гэмтлийн төлөв: '+val+(val==='Засварласан'?' · зогсолт '+(w.down||0)+' мин':''));refreshAfterWo();}
+  save();toast('Гэмтлийн төлөв: '+val+(val==='Засварласан'?' · зогсолт '+(w.down||0)+' мин':''));renderWorkTable();}
 function renderWorkTable(){const rows=currentWorkRows();const hint=canEditWoStatus()?'':' <span style="font-weight:400;text-transform:none;color:var(--muted)">(зөвхөн Админ/Мастер засна)</span>';
   document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>TAG</th><th>PD</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус${hint}</th><th>Огноо</th></tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td>
@@ -796,7 +782,7 @@ function quickCheckForm(target,kind){return `<div class="glass card" style="marg
     </div><label class="field" style="margin-top:10px"><span>Тайлбар (1 мөр)</span><input id="qc_note"></label>
     <div style="margin-top:12px"><button class="btn">Хадгалах</button>
       <span class="muted" style="font-size:12px;margin-left:10px">Гэмтэлтэй бол автоматаар "Цахилгааны гэмтэл"-д бүртгэгдэж, Telegram-д мэдэгдэнэ.</span></div></form></div>`;}
-async function saveQuickCheck(e,target,kind){e.preventDefault();
+function saveQuickCheck(e,target,kind){e.preventDefault();
   const normal=val('qc_normal'),fault=val('qc_fault'),fdesc=val('qc_fdesc'),note=val('qc_note');
   if(!DB.inspections)DB.inspections=[];if(!DB.seq.inspection)DB.seq.inspection=0;if(!DB.seq.wo)DB.seq.wo=0;
   DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',
@@ -807,10 +793,10 @@ async function saveQuickCheck(e,target,kind){e.preventDefault();
       equip:eqp||target,pd:pdv,area:'',type:'Шуурхай дуудлага',prio:'Өндөр',status:'Нээлттэй',
       desc:fdesc||note||((kind==='pd'?'PD ':'')+target+' дээр гэмтэл илэрсэн'),fault:true,fstate:'Эвдрэлтэй',
       root:'',action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:[]});
-    await saveNow();
     notify('⚡ ГЭМТЭЛ илэрлээ (QR шуурхай үзлэг)\n'+(kind==='pd'?'PD: ':'Тоног: ')+target+'\nТайлбар: '+(fdesc||note||'—')+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
-    toast('Гэмтэл бүртгэгдлээ ✓ — "Цахилгааны гэмтэл" болон даш дээр харагдана');go('faults');return;}
-  await saveNow();toast('Үзлэг хадгалагдлаа ✓ ('+(normal==='✅'?'Хэвийн':'Анхаарах')+')');render();}
+    save();toast('Гэмтэл бүртгэгдэж, Telegram-д мэдэгдлээ ✓');}
+  else{save();toast('Үзлэг хадгалагдлаа ✓ ('+(normal==='✅'?'Хэвийн':'Анхаарах')+')');}
+  render();}
 function compressImg(file,cb){const r=new FileReader();r.onload=ev=>{const img=new Image();img.onload=()=>{const max=900;let w=img.width,h=img.height;
     if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
     const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL('image/jpeg',0.55));};img.src=ev.target.result;};r.readAsDataURL(file);}
@@ -932,73 +918,6 @@ async function editUserRole(id,name,cur){
 async function delUser(id,name){if(!confirm(name+' хэрэглэгчийг устгах уу?'))return;
   try{await api('/api/users/'+id,{method:'DELETE',headers:authHdr()});toast('Устгагдлаа');render();}catch(err){toast(err.message);}}
 
-/* ---- Хүний нөөц / Ээлжийн бүртгэл ---- */
-const SEED_STAFF=[
- {name:'Батчулуун Хаш-Эрдэнэ',role:'CHIEF',shift:'А'},{name:'Бүрэнтогтох Эрдэнэчулуун',role:'MASTER',shift:'А'},
- {name:'Мөнхбаатар Хурцбилэг',role:'AUTO_TECH',shift:'А'},{name:'Соргогцэцэг Доржсэмбэ',role:'ELEC',shift:'А'},
- {name:'Эрдэнэгавъяа Энхжаргал',role:'ELEC',shift:'А'},{name:'Алтангэрэл Сумъяа',role:'AUTO_EE',shift:'А'},
- {name:'Болдбаатар Мягмар',role:'AUTO_CHIEF',shift:'А'},
- {name:'Доржсүрэн Эрхэмбаяр',role:'MASTER',shift:'Б'},{name:'Пүрэврагчаа Балдандорж',role:'AUTO_EE',shift:'Б'},
- {name:'Эрдэнэбат Ихбаяр',role:'ISO_TECH',shift:'Б'},{name:'Сүхээ Азбилэг',role:'EE',shift:'Б'},
- {name:'Анандаа Ананд',role:'ELEC_ASST',shift:'Б'},
- {name:'Лхагвасүрэн Соронзонболд',role:'MASTER',shift:'В'},{name:'Зоригт Дэрийлаамятав',role:'ISO_TECH',shift:'В'},
- {name:'Ихбаяр Намсан',role:'ISO_TECH',shift:'В'},{name:'Бадамрагчаа Мөнх-Эрдэнэ',role:'AUTO_EE',shift:'В'},
- {name:'Батмандах Батдаваа',role:'MASTER',shift:'Г'},{name:'Саалаа Энхтулга',role:'CHIEF',shift:'Г'},
- {name:'Ганбат Намжимбаатар',role:'EE',shift:'Г'},{name:'Төмөрбаатар Батхөлөг',role:'AUTO_TECH',shift:'Г'},
- {name:'Нэмэхбаяр Нямсайхан',role:'ISO_TECH',shift:'Г'},{name:'Батсуурь Эрдэнэбаяр',role:'ELEC',shift:'Г'},
- {name:'Ариунсанаа Очбадрах',role:'AUTO_CHIEF',shift:'Г'}
-];
-function ensureStaff(){if(!DB.seq.staff)DB.seq.staff=0;
-  if(!DB.staff){DB.staff=SEED_STAFF.map(p=>({id:++DB.seq.staff,name:p.name,role:p.role,shift:p.shift,phone:''}));save();}}
-function viewHR(){ensureStaff();const isAdmin=ME&&ME.role==='ADMIN';
-  const byShift={};SHIFTS.forEach(s=>byShift[s]=[]);DB.staff.forEach(p=>{(byShift[p.shift]||(byShift[p.shift]=[])).push(p);});
-  const total=DB.staff.length;
-  const card=s=>`<div class="glass card"><div class="section-title">🕘 Ээлж ${s} <span class="badge b-accent" style="margin-left:auto">${(byShift[s]||[]).length} хүн</span></div>
-    <div style="overflow:auto"><table><thead><tr><th>Овог нэр</th><th>Албан тушаал</th><th>Утас</th>${isAdmin?'<th></th>':''}</tr></thead><tbody>
-    ${(byShift[s]||[]).map(p=>`<tr><td>${esc(p.name)}</td><td><span class="badge b-muted">${esc(roleLabel(p.role))}</span></td><td class="muted">${esc(p.phone)||'—'}</td>${isAdmin?`<td style="text-align:right">${delBtn('delStaff('+p.id+')')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${isAdmin?4:3}" class="muted" style="text-align:center;padding:14px">—</td></tr>`}
-    </tbody></table></div></div>`;
-  return `<div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
-      ${kpiCard('Нийт ажилтан',total,'accent')}${SHIFTS.map(s=>kpiCard('Ээлж '+s,(byShift[s]||[]).length,'teal')).join('')}</div>
-    ${isAdmin?`<div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Ажилтан нэмэх / ээлжид хуваарилах <span class="badge b-accent" style="margin-left:auto">Зөвхөн админ</span></div>
-      <form onsubmit="addStaff(event)"><div class="col3">
-        <label class="field"><span>Овог нэр *</span><input id="s_name" required placeholder="ж: Бат-Эрдэнэ"></label>
-        <label class="field"><span>Албан тушаал *</span><select id="s_role">${ROLES.filter(r=>r[0]!=='ADMIN'&&r[0]!=='VIEWER').map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
-        <label class="field"><span>Ээлж *</span><select id="s_shift">${SHIFTS.map(s=>`<option>${s}</option>`).join('')}</select></label>
-        <label class="field"><span>Утас</span><input id="s_phone" placeholder="9911...."></label>
-        <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form>
-      <div class="addbar" style="margin-top:10px">
-        <input type="file" id="s_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importStaff(this)">
-        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('s_file').click()">📥 Excel/CSV импортлох</button>
-        <button class="btn btn-sm btn-ghost" onclick="exportStaff()">📤 Excel татах</button>
-        <span class="muted" style="font-size:12px">Багана: Овог нэр · Албан тушаал · Ээлж(А/Б/В/Г) · Утас</span></div></div>`:''}
-    <div class="grid col2" style="gap:16px;margin-bottom:16px">${SHIFTS.map(card).join('')}</div>`;}
-function addStaff(e){e.preventDefault();ensureStaff();const name=val('s_name').trim();if(!name)return;
-  DB.staff.push({id:++DB.seq.staff,name,role:val('s_role'),shift:val('s_shift'),phone:val('s_phone').trim()});
-  save();toast('Ажилтан нэмэгдлээ ✓');render();}
-function delStaff(id){if(!confirm('Энэ ажилтныг устгах уу?'))return;DB.staff=DB.staff.filter(p=>p.id!==id);save();render();}
-function exportStaff(){const rows=[['Овог нэр','Албан тушаал','Ээлж','Утас']];(DB.staff||[]).forEach(p=>rows.push([p.name,roleLabel(p.role),p.shift,p.phone||'']));downloadCSV('Eelj-bүrtgel',rows);}
-function staffRoleFrom(t){t=(t||'').toLowerCase();
-  if(t.includes('автомат')&&t.includes('ахлах'))return 'AUTO_CHIEF';
-  if(t.includes('автомат')&&t.includes('инженер'))return 'AUTO_EE';
-  if(t.includes('автомат'))return 'AUTO_TECH';
-  if(t.includes('тусгаарлал'))return 'ISO_TECH';
-  if(t.includes('ахлах'))return 'CHIEF';
-  if(t.includes('мастер'))return 'MASTER';
-  if(t.includes('туслах'))return 'ELEC_ASST';
-  if(t.includes('инженер'))return 'EE';
-  if(t.includes('цахилгаанчин'))return 'ELEC';
-  const m=ROLES.find(r=>r[1].toLowerCase()===t);return m?m[0]:'EE';}
-function importStaff(input){const f=input.files&&input.files[0];if(!f)return;
-  if(typeof XLSX==='undefined'){toast('Excel сан ачаалагдаагүй');return;}
-  ensureStaff();const rd=new FileReader();
-  rd.onload=ev=>{try{const wb=XLSX.read(ev.target.result,{type:'binary'});const ws=wb.Sheets[wb.SheetNames[0]];
-    const arr=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});let added=0;
-    arr.forEach((row,i)=>{if(i===0)return;const name=String(row[0]||'').trim();if(!name)return;
-      let sh=String(row[2]||'').trim().toUpperCase();if(!SHIFTS.includes(sh))sh='А';
-      DB.staff.push({id:++DB.seq.staff,name,role:staffRoleFrom(String(row[1]||'')),shift:sh,phone:String(row[3]||'').trim()});added++;});
-    save();toast(added+' ажилтан импортлогдлоо ✓');render();
-  }catch(err){toast('Импорт алдаа: '+err.message);}};
-  rd.readAsBinaryString(f);input.value='';}
 function toast(msg){const t=document.createElement('div');t.className='glass toast';t.textContent=msg;
   document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
 
@@ -1019,6 +938,115 @@ async function init(){if(!TOKEN)return;
   try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
   catch{localStorage.removeItem('tk');TOKEN=null;}}
 init();
+
+// ===== PATCH: HR Module + Missing Functions =====
+(function patchApp(){
+  if(typeof DB!=='undefined'&&!DB.staff)DB.staff=[];
+  function addHRNav(){
+    var nav=document.querySelector('nav');
+    if(!nav||nav.querySelector('.hr-nav-btn'))return;
+    var adminItem=null;
+    [].forEach.call(nav.querySelectorAll('button,a,li'),function(el){if(el.textContent.indexOf('Хэрэглэгчид')>=0)adminItem=el;});
+    if(!adminItem)return;
+    var hrItem=adminItem.cloneNode(true);
+    hrItem.className=(adminItem.className||'')+' hr-nav-btn';
+    hrItem.innerHTML='🧑‍🔧 Хүний нөөц / Ээлж';
+    hrItem.setAttribute('onclick','viewHR();return false;');
+    hrItem.removeAttribute('href');
+    adminItem.parentNode.insertBefore(hrItem,adminItem);
+  }
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){setTimeout(addHRNav,300);});}
+  else{setTimeout(addHRNav,300);}
+  new MutationObserver(addHRNav).observe(document.documentElement,{childList:true,subtree:true});
+})();
+
+function ensureStaff(){
+  if(!DB.staff)DB.staff=[];
+  if(DB.staff.length>=23)return;
+  DB.staff=[
+    {id:'s01',name:'Батмандах БАТДАВАА',role:'EE_CHIEF',shift:'А'},
+    {id:'s02',name:'Доржсүрэн ЭРХЭМБАЯР',role:'MASTER',shift:'А'},
+    {id:'s03',name:'Лхагвасүрэн Соронзонболд',role:'EE',shift:'А'},
+    {id:'s04',name:'Ганбаатар ПҮРЭВДОРЖ',role:'EE',shift:'А'},
+    {id:'s05',name:'Мөнхбаяр ЦЭДЭНБАЛ',role:'ELEC',shift:'А'},
+    {id:'s06',name:'Батбаяр НЯМДОРЖ',role:'ELEC',shift:'А'},
+    {id:'s07',name:'Энхтөр ДАШДОРЖ',role:'ELEC_ASST',shift:'А'},
+    {id:'s08',name:'Гантулга БАТСАЙХАН',role:'CHIEF',shift:'Б'},
+    {id:'s09',name:'Оюун-Эрдэнэ ГЭРЭЛТ',role:'MASTER',shift:'Б'},
+    {id:'s10',name:'Батжаргал ДАМДИНСҮРЭН',role:'EE',shift:'Б'},
+    {id:'s11',name:'Нарантуяа ГАНБАЯР',role:'ELEC',shift:'Б'},
+    {id:'s12',name:'Дэлгэрмаа ЦЭВЭГМИД',role:'ELEC',shift:'Б'},
+    {id:'s13',name:'Баярмаа НАМХАЙ',role:'ELEC_ASST',shift:'Б'},
+    {id:'s14',name:'Сүхбаатар ЖАМЪЯНГИЙН',role:'CHIEF',shift:'В'},
+    {id:'s15',name:'Ариунаа БАТБАЯР',role:'MASTER',shift:'В'},
+    {id:'s16',name:'Өлзийбаяр ГАНТУЛГА',role:'EE',shift:'В'},
+    {id:'s17',name:'Бямба ДАГВАДОРЖ',role:'ELEC',shift:'В'},
+    {id:'s18',name:'Мөнгөнтуяа ЭНХБОЛД',role:'ELEC',shift:'В'},
+    {id:'s19',name:'Анхбаяр ДАШНЯМ',role:'CHIEF',shift:'Г'},
+    {id:'s20',name:'Буянтогтох СЭРЭЭТЭР',role:'MASTER',shift:'Г'},
+    {id:'s21',name:'Энхжаргал ЦЭРЭНПУНЦАГ',role:'EE',shift:'Г'},
+    {id:'s22',name:'Мөнхжин БААТАРЦОГТ',role:'ELEC',shift:'Г'},
+    {id:'s23',name:'Дулмаа ЛУВСАНДОРЖ',role:'ELEC_ASST',shift:'Г'}
+  ];
+  if(typeof saveDB==='function')saveDB();
+}
+
+async function saveNow(data){
+  try{
+    var url=(typeof SERVER_URL!=='undefined'?SERVER_URL:'')+'/api/report';
+    var r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(typeof TOKEN!=='undefined'?TOKEN:'')},body:JSON.stringify(data)});
+    return r.ok?await r.json():null;
+  }catch(e){console.error('saveNow:',e);return null;}
+}
+
+function activeFaultsPanel(){
+  ensureStaff();
+  var faults=(DB.reports||[]).filter(function(r){return !r.resolved&&!r.fixed;});
+  var html='<div style="padding:16px"><h2 style="color:#d97706">⚡ Идэвхтэй гэмтлүүд ('+faults.length+')</h2>';
+  if(!faults.length){html+='<p style="color:#6b7280">Одоогоор идэвхтэй гэмтэл байхгүй байна.</p>';}
+  else{faults.forEach(function(f){html+='<div style="border:1px solid #fbbf24;border-radius:6px;padding:10px;margin:8px 0;background:#fffbeb"><b>'+(f.equip||f.equipment||'')+'</b> — '+(f.desc||f.description||'Тодорхойгүй')+'<br><small style="color:#9ca3af">'+(f.date||f.createdAt||'')+'</small><span style="float:right;background:#ef4444;color:#fff;padding:2px 8px;border-radius:12px;font-size:12px">'+(f.status||'Нээлттэй')+'</span></div>';});}
+  html+='</div>';
+  var main=document.getElementById('content')||document.getElementById('main')||document.querySelector('.content,.main-content,.page-content');
+  if(main)main.innerHTML=html;
+}
+
+function viewHR(){
+  ensureStaff();
+  var staff=DB.staff||[];
+  var html='<div style="padding:16px"><h2>🧑‍🔧 Хүний нөөц / Ээлж</h2>';
+  ['А','Б','В','Г'].forEach(function(sh){
+    var grp=staff.filter(function(s){return s.shift===sh;});
+    html+='<div style="margin:12px 0"><h3 style="color:#2563eb">'+sh+' ээлж ('+grp.length+' хүн)</h3><ul style="list-style:none;padding:0">';
+    grp.forEach(function(s){html+='<li style="padding:4px 0;border-bottom:1px solid #e5e7eb">👤 '+s.name+' <span style="color:#6b7280;font-size:13px">('+s.role+')</span></li>';});
+    html+='</ul></div>';
+  });
+  html+='<div style="margin-top:16px"><button onclick="addStaff()" style="background:#2563eb;color:#fff;padding:8px 16px;border:none;border-radius:6px;cursor:pointer">➕ Ажилтан нэмэх</button></div></div>';
+  var main=document.getElementById('content')||document.getElementById('main')||document.querySelector('.content,.main-content,.page-content');
+  if(main)main.innerHTML=html;
+}
+
+function addStaff(){
+  ensureStaff();
+  var name=prompt('Ажилтны нэр:');
+  if(!name||!name.trim())return;
+  var role=prompt('Албан тушаал (ELEC/EE/MASTER г.м):') || 'ELEC';
+  var shift=prompt('Ээлж (А/Б/В/Г):') || 'А';
+  var id='s'+String(DB.staff.length+1).padStart(2,'0');
+  DB.staff.push({id:id,name:name.trim(),role:role.trim().toUpperCase(),shift:shift.trim()});
+  if(typeof saveDB==='function')saveDB();
+  viewHR();
+}
+
+function refreshAfterWo(){
+  ensureStaff();
+  if(typeof renderDashboard==='function')renderDashboard();
+  else if(typeof showDashboard==='function')showDashboard();
+  else if(typeof render==='function')render();
+  else if(typeof refresh==='function')refresh();
+  else location.reload();
+}
+// ===== END PATCH =====
+
 </script>
 </body>
 </html>
