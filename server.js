@@ -99,7 +99,9 @@ function seedAppData() {
       { id: 3, code: 'BRG-6205', name: 'Холхивч 6205', unit: 'ш', qty: 15, min: 5 }
     ],
     partUsage: [],
-    seq: { report: 2, wo: 3, iso: 3, energy: 2, part: 3, usage: 0 }
+    inspections: [],
+    checkItems: ['Хэт халалт', 'Чимээ шуугиан', 'Тоосжилт', 'Холболт сул эсэх', 'Үнэр / утаа', 'Чичиргээ', 'Тос / тосолгоо'],
+    seq: { report: 2, wo: 3, iso: 3, energy: 2, part: 3, usage: 0, inspection: 0 }
   };
 }
 function seedDB() {

@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Цахилгаан">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
   :root{--base:#0b1020;--panel:#121a2e;--panel2:#172139;--line:#243049;
     --accent:#2e8bff;--teal:#1ec8c8;--ok:#2fd07a;--warn:#ffb020;--danger:#ff4d4f;--muted:#8ea2c0;--text:#e6edf7;}
@@ -247,7 +248,7 @@ const BASE_PAGES=[
   ['iso','Тусгаарлалт / PD','🔒'],['equip','Тоног төхөөрөмж','📦'],
   ['reliab','Найдвартай ажиллагаа','📈'],['report','Тайлан / Дүгнэлт','📅'],
   ['eng','Инженерийн гүйцэтгэл','👤'],['faults','Цахилгааны гэмтэл','⚡'],
-  ['parts','Сэлбэгийн нөөц','🔩'],['ref','Лавлах / Тохиргоо','⚙️'],
+  ['parts','Сэлбэгийн нөөц','🔩'],['inspect','Үзлэг (QR)','✅'],['ref','Лавлах / Тохиргоо','⚙️'],
 ];
 function pages(){const p=[...BASE_PAGES];if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥']);return p;}
 let CUR='dash';
@@ -269,6 +270,8 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='eng')v.innerHTML=viewEng();
   else if(CUR==='faults')v.innerHTML=viewFaults();
   else if(CUR==='parts')v.innerHTML=viewParts();
+  else if(CUR==='inspect')v.innerHTML=viewInspect();
+  else if(CUR==='passport')v.innerHTML=viewPassport();
   else if(CUR==='ref')v.innerHTML=viewRef();
   else if(CUR==='users'){v.innerHTML=viewUsers();loadUsers();}
 }
@@ -367,8 +370,8 @@ function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
       equip,pd:val('w_pd'),area:val('w_area'),type:val('w_type'),prio,status:val('w_status'),
       desc,fault:isFault,fstate:isFault?'Эвдрэлтэй':'',root:val('w_root'),action:val('w_action'),
       start:(s||(isFault?new Date().toISOString().slice(0,16):'')),finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng')});
-    if(isFault&&(prio==='Эгзэгтэй'||prio==='Өндөр')){
-      notify('⚡ '+prio+' зэрэглэлийн ГЭМТЭЛ\nТоног: '+(equip||'—')+'\nТайлбар: '+desc+'\nОгноо: '+val('f_date')+' ('+val('f_shift')+' ээлж)');}
+    if(isFault){
+      notify('⚡ ГЭМТЭЛ бүртгэгдлээ ('+(prio||'—')+')\nТоног: '+(equip||'—')+'\nТайлбар: '+desc+'\nОгноо: '+val('f_date')+' ('+val('f_shift')+' ээлж) · '+(ME?ME.name:''));}
   }
   save();toast('Хадгалагдлаа ✓ ('+no+')');go('dash');}
 
@@ -503,9 +506,9 @@ function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
     <thead><tr><th>TAG</th><th>Нэр</th><th>PD</th><th>Байршил</th><th>Ангилал</th><th>Эгзэгтэй</th><th>Гэмтэл</th><th></th></tr></thead>
     <tbody>${shown.map(e=>{const f=DB.wos.filter(w=>w.equip===e.tag&&w.fault&&inRange(w.date)).length;
       const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
-      return `<tr><td class="t-accent" style="font-family:monospace">${esc(e.tag)}</td><td>${esc(e.name)}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(e.pd)||'—'}</td><td class="muted">${esc(e.area)||'—'}</td>
+      return `<tr><td class="t-accent" style="font-family:monospace;cursor:pointer;text-decoration:underline" title="Паспорт нээх" onclick="openPassport('${esc(e.tag)}')">${esc(e.tag)}</td><td>${esc(e.name)}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(e.pd)||'—'}</td><td class="muted">${esc(e.area)||'—'}</td>
       <td>${esc(e.cat)||'—'}</td><td><span class="badge ${tb}">${esc(e.crit)}</span></td><td>${f}</td>
-      <td>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж олдсонгүй.</td></tr>'}</tbody></table></div>`;}
+      <td style="white-space:nowrap"><button class="ic" title="QR хэвлэх" onclick="showEqQR('${esc(e.tag)}')">🔲</button>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж олдсонгүй.</td></tr>'}</tbody></table></div>`;}
 function refreshEq(v){window._eq=v;document.getElementById('eqResults').innerHTML=eqResultsHTML();}
 function viewEquip(){
   return `${dataListPd()}<div class="glass card" style="margin-bottom:16px">
@@ -520,6 +523,7 @@ function viewEquip(){
       <div style="grid-column:span 3;display:flex;align-items:end"><button class="btn">Нэмэх</button></div></div></form></div>
   <div class="glass card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center">
     🔍 <input id="eq" value="${esc(window._eq||'')}" placeholder="TAG, нэр, PD-аар хайх…" oninput="refreshEq(this.value)">
+    <button class="btn btn-sm btn-ghost" onclick="printAllQR()">🔲 QR хэвлэх</button>
     <button class="btn btn-sm btn-ghost" onclick="exportEquip()">📤 Excel</button></div>
   <div id="eqResults">${eqResultsHTML()}</div>`;}
 function addEquip(e){e.preventDefault();const tag=val('e_tag').trim();
@@ -672,6 +676,7 @@ function usePart(id){const p=DB.parts.find(x=>x.id===id);if(!p)return;
   if(q>+p.qty){toast('Үлдэгдэл хүрэлцэхгүй (одоо '+num(p.qty)+')');return;}
   p.qty=+p.qty-q;if(!DB.partUsage)DB.partUsage=[];if(!DB.seq.usage)DB.seq.usage=0;
   DB.partUsage.push({id:++DB.seq.usage,partId:id,date:iso(new Date()),qty:q,by:ME?ME.name:'',note:''});
+  if(+p.qty<=+(p.min||0)){notify('🔔 СЭЛБЭГ ДУУСАЖ БАЙНА\n'+p.name+' — үлдэгдэл '+num(p.qty)+' '+(p.unit||'ш')+' (доод хязгаар '+num(p.min||0)+')');}
   save();toast('Хасагдлаа: '+q+' '+(p.unit||'ш')+' · үлдэгдэл '+num(p.qty));render();}
 function addStock(id){const p=DB.parts.find(x=>x.id===id);if(!p)return;
   const a=prompt('"'+p.name+'" -д хэдийг нэмэх вэ? (одоо '+num(p.qty)+')');
@@ -697,15 +702,97 @@ function importParts(input){const f=input.files&&input.files[0];if(!f)return;
   }catch(err){toast('Импортын алдаа — файлын форматыг шалгана уу');}};
   rd.readAsBinaryString(f);input.value='';}
 
+/* ---- QR код / Дижитал паспорт / Үзлэг ---- */
+function qrUrl(tag){return location.origin+'/?eq='+encodeURIComponent(tag);}
+async function printAllQR(){if(typeof QRCode==='undefined'){toast('QR сан ачаалагдаагүй — интернэт шалгана уу');return;}
+  const list=(typeof eqFiltered==='function'?eqFiltered():DB.equip).slice(0,200);
+  if(!list.length){toast('Тоног алга');return;}
+  toast('QR код бэлдэж байна… ('+list.length+')');
+  const cells=[];
+  for(const e of list){const d=await QRCode.toDataURL(qrUrl(e.tag),{width:140,margin:1});
+    cells.push('<div class="qrcell"><img src="'+d+'"><div class="t">'+esc(e.tag)+'</div><div class="n">'+esc(e.name||'')+'</div></div>');}
+  const w=window.open('','_blank');if(!w){toast('Popup зөвшөөрнө үү');return;}
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>QR кодууд</title><style>body{font-family:sans-serif;margin:10px}h3{margin:4px 0 10px}.grid{display:flex;flex-wrap:wrap;gap:8px}.qrcell{border:1px solid #999;border-radius:6px;padding:6px;width:160px;text-align:center;page-break-inside:avoid}.qrcell img{width:140px;height:140px}.qrcell .t{font-weight:700;font-size:13px;font-family:monospace;margin-top:2px}.qrcell .n{font-size:10px;color:#444;height:26px;overflow:hidden}</style></head><body><h3>Тоног төхөөрөмжийн QR кодууд ('+cells.length+')</h3><div class="grid">'+cells.join('')+'</div></body></html>');
+  w.document.close();w.focus();setTimeout(function(){w.print();},700);}
+async function showEqQR(tag){if(typeof QRCode==='undefined'){toast('QR сан алга');return;}
+  const d=await QRCode.toDataURL(qrUrl(tag),{width:300,margin:2});const e=DB.equip.find(x=>x.tag===tag)||{};
+  const w=window.open('','_blank');if(!w){toast('Popup зөвшөөрнө үү');return;}
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>QR '+esc(tag)+'</title></head><body style="text-align:center;font-family:sans-serif;padding:20px"><h2 style="font-family:monospace">'+esc(tag)+'</h2><div>'+esc(e.name||'')+'</div><img src="'+d+'" style="width:300px;margin-top:10px"><p style="font-size:11px;color:#777">'+esc(qrUrl(tag))+'</p></body></html>');
+  w.document.close();w.focus();setTimeout(function(){w.print();},400);}
+function openPassport(tag){window._eqTag=tag;go('passport');}
+function prefillNew(tag){go('new');setTimeout(function(){const el=document.getElementById('w_equip');if(el)el.value=tag;},60);}
+function openInspectFor(tag){window._inspectEquip=tag;go('inspect');}
+function viewPassport(){const tag=window._eqTag;const e=DB.equip.find(x=>x.tag===tag)||{tag:tag,name:'(бүртгэлгүй)'};
+  const works=DB.wos.filter(w=>w.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
+  const faults=works.filter(w=>w.fault);const insp=(DB.inspections||[]).filter(i=>i.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
+  const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
+  return `<div class="glass card" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="font-size:22px;font-weight:700;font-family:monospace" class="t-accent">${esc(e.tag)}</div>
+      ${e.crit?`<span class="badge ${tb}">${esc(e.crit)}</span>`:''}<span class="muted">${esc(e.name||'')}</span>
+      <button class="btn btn-sm" style="margin-left:auto" onclick="showEqQR('${esc(tag)}')">🔲 QR хэвлэх</button></div>
+    <div class="muted" style="margin-top:6px">PD: ${esc(e.pd)||'—'} · Байршил: ${esc(e.area)||'—'} · Ангилал: ${esc(e.cat)||'—'}</div>
+    <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:14px">
+      ${kpiCard('Нийт ажил',works.length,'accent')}${kpiCard('Гэмтэл',faults.length,'danger')}
+      ${kpiCard('Идэвхтэй гэмтэл',works.filter(isActiveFault).length,'warn')}${kpiCard('Үзлэг',insp.length,'ok')}</div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="openInspectFor('${esc(tag)}')">✅ Үзлэг хийх</button>
+      <button class="btn btn-ghost" onclick="prefillNew('${esc(tag)}')">⚡ Ажил/гэмтэл бүртгэх</button></div></div>
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title">📋 Ажил / гэмтлийн түүх</div>
+    <div style="overflow:auto"><table><thead><tr><th>Огноо</th><th>Төрөл</th><th>Тайлбар</th><th>Төлөв</th></tr></thead>
+    <tbody>${works.slice(0,30).map(w=>`<tr><td>${w.date}</td><td>${esc(w.type)}</td><td style="max-width:280px">${esc(w.desc)}</td>
+      <td>${w.fault?`<span class="badge ${faultBadge(faultState(w))}">${esc(faultState(w))}</span>`:`<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="text-align:center;padding:20px">Бүртгэл алга.</td></tr>'}</tbody></table></div></div>
+  <div class="glass card"><div class="section-title">✅ Үзлэгийн түүх</div>
+    <div style="overflow:auto"><table><thead><tr><th>Огноо</th><th>Хийсэн</th><th>Дүн</th><th>Анхаарах зүйлс</th></tr></thead>
+    <tbody>${insp.slice(0,20).map(i=>`<tr><td>${i.date}</td><td>${esc(i.by)||'—'}</td>
+      <td><span class="badge ${i.overall==='Анхаарах'?'b-warn':'b-ok'}">${esc(i.overall||'OK')}</span></td>
+      <td class="muted" style="max-width:260px">${esc((i.results||[]).filter(r=>r.status==='Анхаарах').map(r=>r.item+(r.note?':'+r.note:'')).join('; '))||'—'}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="text-align:center;padding:20px">Үзлэг алга.</td></tr>'}</tbody></table></div></div>`;}
+function viewInspect(){if(!DB.inspections)DB.inspections=[];if(!DB.checkItems)DB.checkItems=[];
+  const sel=window._inspectEquip||'';const items=DB.checkItems;
+  const hist=DB.inspections.filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1);
+  return `${dataListEquip()}
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title">✅ Үзлэг хийх <span class="badge b-accent" style="margin-left:auto">QR уншуулсан эсвэл TAG сонгох</span></div>
+    <form onsubmit="saveInspection(event)"><div class="col3">
+      <label class="field"><span>Огноо *</span><input type="date" id="ins_date" required value="${iso(new Date())}"></label>
+      <label class="field"><span>Тоног төхөөрөмж / TAG *</span><input id="ins_equip" list="equipList" required value="${esc(sel)}" placeholder="ж: MG-101"></label>
+      <label class="field"><span>Хийсэн хүн</span><input id="ins_by" value="${esc(ME?ME.name:'')}"></label></div>
+    <div class="section-title" style="margin-top:14px">Шалгах жагсаалт</div>
+    <div class="grid col2">${items.map((it,idx)=>`<div class="glass" style="padding:10px;border-radius:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="flex:1;min-width:120px">${esc(it)}</span>
+      <select id="ins_st_${idx}" style="width:auto"><option>OK</option><option>Анхаарах</option><option>Хамаарахгүй</option></select>
+      <input id="ins_nt_${idx}" placeholder="тэмдэглэл" style="width:130px"></div>`).join('')||'<div class="muted">Шалгах зүйл алга — "Лавлах"-аас нэмнэ.</div>'}</div>
+    <label class="field" style="margin-top:12px"><span>Ерөнхий тэмдэглэл</span><input id="ins_note"></label>
+    <div style="margin-top:12px"><button class="btn">Үзлэг хадгалах</button>
+      <span class="muted" style="font-size:12px;margin-left:10px">Аль нэг нь "Анхаарах" бол Telegram-д мэдэгдэнэ.</span></div></form></div>
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportInspect()">📤 Excel татах</button>')}
+  <div class="glass card" style="padding:0;overflow:auto"><table>
+    <thead><tr><th>Огноо</th><th>Тоног</th><th>Хийсэн</th><th>Дүн</th><th>Анхаарах зүйлс</th><th></th></tr></thead>
+    <tbody>${hist.map(i=>`<tr><td>${i.date}</td><td class="t-accent" style="font-family:monospace">${esc(i.equip)}</td><td>${esc(i.by)||'—'}</td>
+      <td><span class="badge ${i.overall==='Анхаарах'?'b-warn':'b-ok'}">${esc(i.overall||'OK')}</span></td>
+      <td class="muted" style="max-width:300px">${esc((i.results||[]).filter(r=>r.status==='Анхаарах').map(r=>r.item+(r.note?' ('+r.note+')':'')).join('; '))||'—'}</td>
+      <td>${delBtn(`delInspection(${i.id})`)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:32px" class="muted">Үзлэг алга.</td></tr>'}</tbody></table></div>`;}
+function saveInspection(e){e.preventDefault();if(!DB.inspections)DB.inspections=[];if(!DB.seq.inspection)DB.seq.inspection=0;
+  const items=DB.checkItems||[];const results=items.map((it,idx)=>({item:it,status:val('ins_st_'+idx),note:val('ins_nt_'+idx)}));
+  const overall=results.some(r=>r.status==='Анхаарах')?'Анхаарах':'OK';
+  const rec={id:++DB.seq.inspection,date:val('ins_date'),equip:val('ins_equip'),by:val('ins_by'),results,overall,note:val('ins_note')};
+  DB.inspections.push(rec);save();toast('Үзлэг хадгалагдлаа ✓ ('+overall+')');
+  if(overall==='Анхаарах'){notify('✅ ҮЗЛЭГ: Анхаарах илэрлээ\nТоног: '+rec.equip+'\nАсуудал: '+results.filter(r=>r.status==='Анхаарах').map(r=>r.item).join(', ')+'\nОгноо: '+rec.date+' · '+(rec.by||''));}
+  window._inspectEquip='';render();}
+function delInspection(id){if(!confirm('Устгах уу?'))return;DB.inspections=DB.inspections.filter(i=>i.id!==id);save();render();}
+function exportInspect(){const rows=[['Огноо','Тоног','Хийсэн','Дүн','Анхаарах зүйлс','Тэмдэглэл']];
+  (DB.inspections||[]).filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(i=>rows.push([i.date,i.equip,i.by,i.overall,(i.results||[]).filter(r=>r.status==='Анхаарах').map(r=>r.item).join('; '),i.note]));
+  downloadCSV('Uzleg_'+RANGE.from+'_'+RANGE.to,rows);}
+
 /* ---- Лавлах ---- */
 function refBlock(title,kind,arr){return `<div class="glass card"><div class="section-title">${title}</div>
     <div class="addbar"><input id="add_${kind}" placeholder="Шинээр нэмэх..."><button class="btn btn-sm" onclick="addRef('${kind}')">Нэмэх</button></div>
     <div class="chips">${arr.map((x,idx)=>`<span class="chip">${esc(x)}${delBtn(`delRef('${kind}',${idx})`)}</span>`).join('')||'<span class="muted" style="font-size:13px">Хоосон</span>'}</div></div>`;}
 function viewRef(){return `<div class="grid col2" style="margin-bottom:12px">
     ${refBlock('📍 Байршил','areas',DB.areas)}${refBlock('🔧 Ажлын төрөл','types',DB.types)}
-    ${refBlock('👤 Хариуцсан инженер','engineers',DB.engineers)}${refBlock('🔒 Тусгаарлалт хийсэн хүн','isoPersons',DB.isoPersons)}</div>
+    ${refBlock('👤 Хариуцсан инженер','engineers',DB.engineers)}${refBlock('🔒 Тусгаарлалт хийсэн хүн','isoPersons',DB.isoPersons)}
+    ${refBlock('✅ Үзлэгийн шалгах зүйл','checkItems',DB.checkItems||[])}</div>
   <div class="note">Эдгээр жагсаалт нь формуудын сонголтод шууд тусна.</div>`;}
-function addRef(kind){const inp=document.getElementById('add_'+kind);const v=inp.value.trim();
+function addRef(kind){if(!DB[kind])DB[kind]=[];const inp=document.getElementById('add_'+kind);const v=inp.value.trim();
   if(!v)return;if(DB[kind].includes(v)){toast('Аль хэдийн бий');return;}DB[kind].push(v);save();render();toast('Нэмэгдлээ ✓');}
 function delRef(kind,idx){DB[kind].splice(idx,1);save();render();}
 
@@ -761,7 +848,8 @@ function logout(){localStorage.removeItem('tk');TOKEN=null;ME=null;location.relo
 function startApp(){document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('who').textContent=ME.name;document.getElementById('whoRole').textContent=roleLabel(ME.role);
-  renderNav();renderPresets();syncDates();render();}
+  renderNav();renderPresets();syncDates();render();
+  try{const eq=new URLSearchParams(location.search).get('eq');if(eq){openPassport(eq);}}catch(e){}}
 async function init(){if(!TOKEN)return;
   try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
   catch{localStorage.removeItem('tk');TOKEN=null;}}
