@@ -196,8 +196,12 @@ const canEditWoStatus=()=>ME&&WO_EDIT_ROLES.includes(ME.role);
 const WO2_STATES=['Open','In Progress','Waiting','Completed','Cancelled'];
 const wo2Label={'Open':'Нээлттэй','In Progress':'Хийгдэж буй','Waiting':'Хүлээгдэж буй','Completed':'Дууссан','Cancelled':'Цуцалсан'};
 const wo2Badge={'Open':'b-accent','In Progress':'b-warn','Waiting':'b-muted','Completed':'b-ok','Cancelled':'b-danger'};
-const canCreateWo=()=>ME&&WO_EDIT_ROLES.includes(ME.role);
+// Work Order үүсгэх/оноох эрх: Админ, Ахлах, Цахилгааны мастер, Автоматжуулалтын инженер
+const WO_CREATE_ROLES=['ADMIN','CHIEF','AUTO_CHIEF','MASTER','AUTO_EE'];
+const canCreateWo=()=>ME&&WO_CREATE_ROLES.includes(ME.role);
 const canOperateWo=()=>ME&&ME.role!=='VIEWER';
+// Лавлах/Тохиргоо харах эрх: удирдлага + инженерүүд
+const canSeeRef=()=>ME&&['ADMIN','CHIEF','MASTER','EE','AUTO_CHIEF','AUTO_EE'].includes(ME.role);
 // Тусгаарлалтын төлөвийг зөвхөн Тусгаарлалтын техникч (+Админ) өөрчилнө
 const canEditIsoStatus=()=>ME&&(ME.role==='ADMIN'||ME.role==='ISO_TECH');
 // Мэдээлэл устгахыг зөвхөн Админ хийнэ
@@ -302,7 +306,8 @@ const BASE_PAGES=[
   ['parts','Сэлбэгийн нөөц','🔩'],['inspect','Үзлэг (QR)','✅'],['qr','QR кодууд','🔲'],
   ['hr','Хүний нөөц / Ээлж','🧑‍🔧'],['ref','Лавлах / Тохиргоо','⚙️'],
 ];
-function pages(){const p=[...BASE_PAGES];
+function pages(){let p=[...BASE_PAGES];
+  if(!canSeeRef())p=p.filter(x=>x[0]!=='ref');
   if(canSeeAttend()){const i=p.findIndex(x=>x[0]==='hr');p.splice(i>=0?i+1:p.length,0,['attend','Цаг бүртгэл','🕒']);}
   if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥']);return p;}
 let CUR='dash';
@@ -355,6 +360,7 @@ function viewDash(){const k=kpis();
     ${kpiCard('MTTR (мин)',k.mttr,'warn')}${kpiCard('Downtime (мин)',k.down,'danger')}
     ${kpiCard('Ажилласан цаг',k.workHours,'teal','Хүн тоо × 12ц')}${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}</div>
   ${todayWorkingPanel()}
+  ${rangeLoadPanel()}
   ${activeFaultsPanel()}
   <div class="grid col3" style="grid-template-columns:2fr 1fr;margin-bottom:16px">
     <div class="glass card"><div class="section-title">📈 Өдрийн чиг хандлага — ажил &amp; гэмтэл</div><canvas id="cTrend" height="110"></canvas></div>
@@ -379,6 +385,18 @@ function todayWorkingPanel(){const today=iso(new Date());const recs=(DB.attendan
   return `<div class="grid col2" style="margin-bottom:16px">
     <div class="glass card"><div class="section-title">☀️ Өнөөдөр өдрөөр ажиллаж буй <span class="badge b-ok" style="margin-left:auto">${day.length}</span></div>${grp(day)}</div>
     <div class="glass card"><div class="section-title">🌙 Өнөөдөр шөнөөр ажиллаж буй <span class="badge b-accent" style="margin-left:auto">${night.length}</span></div>${grp(night)}</div></div>`;}
+function rangeLoadPanel(){if(RANGE.from===RANGE.to)return '';const recsAll=DB.attendance||[];const WD=['Ня','Да','Мя','Лх','Пү','Ба','Бя'];
+  const rows=[];let d=new Date(RANGE.from),end=new Date(RANGE.to),g=0;
+  while(d<=end&&g<62){const ds=iso(d);const recs=recsAll.filter(a=>a.date===ds);
+    const dc=recs.filter(a=>['day','office','holiday','ot','callout'].includes(attKey(a))).length;
+    const nc=recs.filter(a=>attKey(a)==='night').length;
+    const oc=recs.filter(a=>['rosteroff','shiftl','sick','leaveu','leavep','standby'].includes(attKey(a))).length;
+    rows.push({ds,wk:new Date(ds).getDay(),dc,nc,oc});d.setDate(d.getDate()+1);g++;}
+  const has=rows.some(r=>r.dc||r.nc||r.oc);
+  return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">📅 Сонгосон хугацааны ээлжийн ачаалал <span class="muted" style="font-weight:400;font-size:12px;margin-left:auto">${RANGE.from} – ${RANGE.to}</span></div>
+    ${has?`<div style="overflow:auto"><table><thead><tr><th>Огноо</th><th>Гариг</th><th>☀️ Өдөр</th><th>🌙 Шөнө</th><th>Амралт/Чөлөө</th></tr></thead>
+      <tbody>${rows.map(r=>{const we=r.wk===0||r.wk===6;return `<tr style="${we?'background:rgba(255,180,32,.07)':''}"><td>${r.ds}</td><td class="${we?'t-warn':'muted'}">${WD[r.wk]}</td><td style="text-align:center" class="t-ok">${r.dc||'—'}</td><td style="text-align:center" class="t-accent">${r.nc||'—'}</td><td style="text-align:center" class="muted">${r.oc||'—'}</td></tr>`;}).join('')}</tbody></table></div>`
+      :'<div class="muted" style="padding:8px">Энэ хугацаанд цаг бүртгэл алга — Цаг бүртгэл цэснээс оруулна уу.</div>'}</div>`;}
 let charts=[];
 function destroyCharts(){charts.forEach(c=>c.destroy());charts=[];}
 function baseOpts(extra={}){const tick='#8ea2c0',gridC='#243049';
@@ -843,12 +861,13 @@ function viewPdPassport(){const pd=window._pdTag;
     <div style="overflow:auto"><table><thead><tr><th>Огноо</th><th>TAG</th><th>Тайлбар</th><th>Төлөв</th></tr></thead>
     <tbody>${works.slice(0,30).map(w=>`<tr><td>${w.date}</td><td>${esc(w.equip)}</td><td style="max-width:280px">${esc(w.desc)}</td>
       <td>${w.fault?`<span class="badge ${faultBadge(faultState(w))}">${esc(faultState(w))}</span>`:`<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Бүртгэл алга.</td></tr>'}</tbody></table></div></div>`;}
-function quickCheckForm(target,kind){return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">✅ Шуурхай үзлэг (QR)</div>
+function quickCheckForm(target,kind){window._newPhotos=[];return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">✅ Шуурхай үзлэг (QR)</div>
     <form onsubmit="saveQuickCheck(event,'${esc(target)}','${kind}')"><div class="col3">
       <label class="field"><span>Хэвийн эсэх?</span><select id="qc_normal"><option value="✅">✅ Хэвийн</option><option value="❌">❌ Хэвийн бус</option></select></label>
-      <label class="field"><span>Гэмтэл илэрсэн үү?</span><select id="qc_fault" onchange="document.getElementById('qc_dw').style.display=this.value==='Тийм'?'block':'none'"><option>Үгүй</option><option>Тийм</option></select></label>
+      <label class="field"><span>Гэмтэл илэрсэн үү?</span><select id="qc_fault" onchange="document.getElementById('qc_dw').style.display=this.value==='Тийм'?'block':'none';document.getElementById('qc_pw').style.display=this.value==='Тийм'?'block':'none'"><option>Үгүй</option><option>Тийм</option></select></label>
       <label class="field" id="qc_dw" style="display:none"><span>Гэмтлийн тайлбар</span><input id="qc_fdesc" placeholder="юу эвдэрсэн бэ"></label>
     </div><label class="field" style="margin-top:10px"><span>Тайлбар (1 мөр)</span><input id="qc_note"></label>
+    <div class="field" id="qc_pw" style="display:none;margin-top:10px"><span>📷 Гэмтлийн зураг хавсаргах</span><input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></div>
     <div style="margin-top:12px"><button class="btn">Хадгалах</button>
       <span class="muted" style="font-size:12px;margin-left:10px">Гэмтэлтэй бол автоматаар "Цахилгааны гэмтэл"-д бүртгэгдэж, Telegram-д мэдэгдэнэ.</span></div></form></div>`;}
 async function saveQuickCheck(e,target,kind){e.preventDefault();
@@ -861,8 +880,8 @@ async function saveQuickCheck(e,target,kind){e.preventDefault();
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:null,date:iso(new Date()),
       equip:eqp||target,pd:pdv,area:'',type:'Шуурхай дуудлага',prio:'Өндөр',status:'Нээлттэй',
       desc:fdesc||note||((kind==='pd'?'PD ':'')+target+' дээр гэмтэл илэрсэн'),fault:true,fstate:'Эвдрэлтэй',
-      root:'',action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:[]});
-    await saveNow();
+      root:'',action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()});
+    window._newPhotos=[];await saveNow();
     notify('⚡ ГЭМТЭЛ илэрлээ (QR шуурхай үзлэг)\n'+(kind==='pd'?'PD: ':'Тоног: ')+target+'\nТайлбар: '+(fdesc||note||'—')+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
     toast('Гэмтэл бүртгэгдлээ ✓ — "Цахилгааны гэмтэл" болон даш дээр харагдана');go('faults');return;}
   await saveNow();toast('Үзлэг хадгалагдлаа ✓ ('+(normal==='✅'?'Хэвийн':'Анхаарах')+')');render();}
@@ -940,7 +959,7 @@ function exportInspect(){const rows=[['Огноо','Тоног','Хийсэн','
 function refBlock(title,kind,arr){return `<div class="glass card"><div class="section-title">${title}</div>
     <div class="addbar"><input id="add_${kind}" placeholder="Шинээр нэмэх..."><button class="btn btn-sm" onclick="addRef('${kind}')">Нэмэх</button></div>
     <div class="chips">${arr.map((x,idx)=>`<span class="chip">${esc(x)}${delBtn(`delRef('${kind}',${idx})`)}</span>`).join('')||'<span class="muted" style="font-size:13px">Хоосон</span>'}</div></div>`;}
-function viewRef(){return `<div class="grid col2" style="margin-bottom:12px">
+function viewRef(){if(!canSeeRef())return '<div class="glass card">Энэ хэсэгт хандах эрхгүй.</div>';return `<div class="grid col2" style="margin-bottom:12px">
     ${refBlock('📍 Байршил','areas',DB.areas)}${refBlock('🔧 Ажлын төрөл','types',DB.types)}
     ${refBlock('👤 Хариуцсан инженер','engineers',DB.engineers)}${refBlock('🔒 Тусгаарлалт хийсэн хүн','isoPersons',DB.isoPersons)}
     ${refBlock('✅ Үзлэгийн шалгах зүйл','checkItems',DB.checkItems||[])}</div>
@@ -955,10 +974,12 @@ function viewUsers(){return `<div class="glass card" style="margin-bottom:16px">
     <form onsubmit="addUser(event)"><div class="col3">
       <label class="field"><span>Нэвтрэх нэр *</span><input id="u_username" required placeholder="ж: bat"></label>
       <label class="field"><span>Овог нэр *</span><input id="u_name" required placeholder="ж: Бат-Эрдэнэ"></label>
-      <label class="field"><span>Нууц үг *</span><input id="u_pw" required placeholder="нууц үг"></label>
-      <label class="field"><span>Эрх</span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
+      <label class="field"><span>Нууц үг *</span><input id="u_pw" required value="123456" placeholder="нууц үг"></label>
+      <label class="field"><span>Эрх / Албан тушаал</span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
       <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form>
-    <div class="note" style="margin-top:12px">🔑 товчоор нууц үг солино · ⚙️ товчоор эрх солино · Эрх: <b>Админ</b>=бүх эрх+хэрэглэгч удирдах · <b>Ахлах/Инженер/Техникч</b>=бүртгэх, засах · <b>Үзэгч</b>=зөвхөн харах.</div></div>
+    <div class="addbar" style="margin-top:10px"><button class="btn btn-sm" onclick="createUsersFromHR()">🧑‍🔧 Хүний нөөцийн бүх ажилтнаар бүртгэл үүсгэх (нууц үг 123456)</button>
+      <span class="muted" style="font-size:12px">Албан тушаал тус бүрийн эрхээр автоматаар бүртгэл үүснэ.</span></div>
+    <div class="note" style="margin-top:12px">🔑 товчоор нууц үг солино (зөвхөн админ) · ⚙️ товчоор эрх солино · Шинэ бүртгэлийн анхны нууц үг: <b>123456</b>.</div></div>
   <div class="glass card" style="padding:0;overflow:auto"><table id="userTable"><tbody><tr><td class="muted" style="padding:20px">Уншиж байна…</td></tr></tbody></table></div>`;}
 async function loadUsers(){try{const us=await api('/api/users',{headers:authHdr()});
   document.getElementById('userTable').innerHTML=`<thead><tr><th>Нэвтрэх нэр</th><th>Овог нэр</th><th>Эрх</th><th style="text-align:right">Үйлдэл</th></tr></thead>
@@ -970,6 +991,17 @@ async function loadUsers(){try{const us=await api('/api/users',{headers:authHdr(
         ${u.id===ME.id?'<span class="muted" style="font-size:12px;margin-left:4px">(та)</span>':`<button class="del" title="Устгах" onclick="delUser(${u.id},'${esc(u.username)}')">✕</button>`}
       </td></tr>`).join('')}</tbody>`;
   }catch(e){toast(e.message);}}
+function cyr2lat(s){const m={'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'j','з':'z','и':'i','й':'i','к':'k','л':'l','м':'m','н':'n','о':'o','ө':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ү':'u','ф':'f','х':'h','ц':'ts','ч':'ch','ш':'sh','щ':'sh','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya'};
+  return (s||'').toLowerCase().split('').map(c=>m[c]!==undefined?m[c]:(/[a-z0-9]/.test(c)?c:'')).join('').replace(/[^a-z0-9]/g,'');}
+async function createUsersFromHR(){if(!ME||ME.role!=='ADMIN'){toast('Зөвхөн админ');return;}ensureStaff();
+  if(!confirm('Хүний нөөцийн '+DB.staff.length+' ажилтнаар бүртгэл үүсгэх үү? (нууц үг 123456)'))return;
+  let us=[];try{us=await api('/api/users',{headers:authHdr()});}catch(e){}
+  const exU=new Set(us.map(u=>u.username));const exN=new Set(us.map(u=>u.name));let made=0,skip=0;
+  for(const s of DB.staff){if(exN.has(s.name)){skip++;continue;}
+    const parts=s.name.trim().split(/\s+/);let base=cyr2lat(parts[parts.length-1])||cyr2lat(parts[0])||'user';if(!base)base='user';
+    let un=base,n=1;while(exU.has(un)){un=base+(++n);}
+    try{await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify({username:un,name:s.name,password:'123456',role:s.role})});exU.add(un);exN.add(s.name);made++;}catch(e){skip++;}}
+  toast(made+' бүртгэл үүслээ · '+skip+' алгассан · нууц үг 123456');render();}
 async function addUser(e){e.preventDefault();
   try{await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify({
       username:val('u_username').trim(),name:val('u_name').trim(),password:val('u_pw'),role:val('u_role')})});
@@ -1123,11 +1155,14 @@ function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ 
   const staff=[...DB.staff].sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name));
   const sum=attMonthSummary(m);const today=iso(new Date());
   const todayRecs=(DB.attendance||[]).filter(a=>a.date===today);const tc=ks=>todayRecs.filter(a=>ks.includes(attKey(a))).length;
+  const WD=['Ня','Да','Мя','Лх','Пү','Ба','Бя'];
   let head='<th style="position:sticky;left:0;background:#11182b;z-index:2">Ажилтан</th><th>Ээлж</th>';
-  for(let d=1;d<=nd;d++)head+='<th style="min-width:30px;font-size:11px">'+d+'</th>';
+  for(let d=1;d<=nd;d++){const wk=new Date(m+'-'+String(d).padStart(2,'0')).getDay();const we=wk===0||wk===6;
+    head+='<th style="min-width:30px;font-size:10px;'+(we?'background:rgba(255,180,32,.14);':'')+'">'+d+'<div style="font-weight:400;font-size:9px;color:'+(we?'#ffb020':'#8ea2c0')+'">'+WD[wk]+'</div></th>';}
   const grid=staff.map(s=>{let cells='';for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const r=attRec(s.id,ds);
-      const c=r?attCodeOf(r):'';const col=r?attTone(r):'transparent';const k=attKey(r);
-      cells+=`<td onclick="${edit?`editAttCell(${s.id},'${ds}')`:''}" title="${r&&k?esc(ATT2BY[k].lbl)+(r.hours?' · '+r.hours+'ц':''):''}" style="text-align:center;font-size:10px;font-weight:700;color:#0b0f1a;background:${r?col:'transparent'};${edit?'cursor:pointer;':''}border:1px solid var(--line)">${c}</td>`;}
+      const wk=new Date(ds).getDay();const we=wk===0||wk===6;
+      const c=r?attCodeOf(r):'';const col=r?attTone(r):(we?'rgba(255,180,32,.07)':'transparent');const k=attKey(r);
+      cells+=`<td onclick="${edit?`editAttCell(${s.id},'${ds}')`:''}" title="${r&&k?esc(ATT2BY[k].lbl)+(r.hours?' · '+r.hours+'ц':''):''}" style="text-align:center;font-size:10px;font-weight:700;color:${r?'#0b0f1a':'#8ea2c0'};background:${col};${edit?'cursor:pointer;':''}border:1px solid var(--line)">${c}</td>`;}
     return `<tr><td style="position:sticky;left:0;background:#11182b;white-space:nowrap;font-size:12px">${esc(s.name)}</td><td style="text-align:center"><span class="badge b-muted">${esc(s.shift)}</span></td>${cells}</tr>`;}).join('');
   const sumRows=staff.map(s=>{const t=sum[s.id]||{};return `<tr><td style="white-space:nowrap">${esc(s.name)}</td><td style="text-align:center">${esc(s.shift)}</td>
       <td style="text-align:center;font-weight:700" class="t-teal">${t.worked||0}</td>
@@ -1220,8 +1255,11 @@ function woControls(w){if(!canOperateWo())return '';const b=[];
   return b.join(' ');}
 function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();const mgr=canCreateWo();
   const list=[...DB.naryad].sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(a.createdAt<b.createdAt?1:-1));
-  const assignStaff=[...DB.staff].filter(s=>!['ADMIN','CHIEF','AUTO_CHIEF'].includes(s.role)).sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name));
-  const staffChecks=assignStaff.map(s=>`<label style="display:inline-flex;align-items:center;gap:5px;margin:3px 10px 3px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="wo_as" value="${s.id}" style="width:auto"> ${esc(s.shift)}·${esc(s.name)} <span class="muted" style="font-size:11px">${esc(roleLabel(s.role))}</span></label>`).join('');
+  const assignStaff=[...DB.staff].filter(s=>!['ADMIN','CHIEF','AUTO_CHIEF'].includes(s.role));
+  const byRole={};assignStaff.forEach(s=>{(byRole[s.role]=byRole[s.role]||[]).push(s);});
+  const roleOrder=ROLES.map(r=>r[0]).filter(r=>byRole[r]);
+  const staffGroups=roleOrder.map(r=>`<details style="border-bottom:1px solid var(--line);padding:2px 0"><summary style="cursor:pointer;font-weight:600;padding:6px 4px;font-size:13px">${esc(roleLabel(r))} <span class="muted" style="font-weight:400">(${byRole[r].length})</span></summary>
+      <div style="padding:2px 0 8px 16px">${byRole[r].sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name)).map(s=>`<label style="display:block;margin:3px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="wo_as" value="${s.id}" style="width:auto"> ${esc(s.shift)}·${esc(s.name)}</label>`).join('')}</div></details>`).join('');
   const kpi=woKPI();const kArr=Object.values(kpi).filter(t=>t.done>0).sort((a,b)=>b.score-a.score);
   const rows=list.map(w=>{const ph=(w.photos&&w.photos.length)?photoThumbs(w.photos):'';
     return `<tr><td class="t-accent" style="font-family:monospace;font-size:11px">${esc(w.no)}</td>
@@ -1246,8 +1284,8 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();
         <label class="field"><span>Байршил</span><select id="wo_area"><option value="">—</option>${optList(DB.areas)}</select></label>
         <label class="field"><span>Эхлэх (товлосон)</span><input type="datetime-local" id="wo_pstart"></label>
         <label class="field"><span>Дуусах (товлосон)</span><input type="datetime-local" id="wo_pfinish"></label>
-        <div class="field" style="grid-column:span 3"><span>Гүйцэтгэх ажилтан (нэг буюу хэд сонгоно · ахлах инженер хамаарахгүй)</span>
-          <div style="max-height:140px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:4px">${staffChecks||'<span class="muted">Ажилтан алга</span>'}</div></div>
+        <div class="field" style="grid-column:span 3"><span>Гүйцэтгэх ажилтан — албан тушаал дээр дарж задлаад сонгоно (ахлах инженер хамаарахгүй)</span>
+          <div style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 8px;margin-top:4px">${staffGroups||'<span class="muted">Ажилтан алга</span>'}</div></div>
       </div><div style="margin-top:10px">${dataListEquip()}${dataListPd()}<button class="btn">Наряд үүсгэх</button></div></form></div>`:''}
     <div class="glass card" style="padding:0;overflow:auto;margin-bottom:16px"><div class="section-title" style="padding:12px 14px 0">🧾 Нарядууд</div>
       <table><thead><tr><th>№</th><th>Ажил</th><th>Гүйцэтгэгч</th><th>Товлосон</th><th>Хугацаа</th><th>Төлөв</th><th>Үйлдэл</th></tr></thead>
