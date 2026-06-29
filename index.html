@@ -184,7 +184,10 @@ const ATT2BY=Object.fromEntries(ATT2.map(x=>[x.k,x]));
 // Хуучин төлвийг шинэ түлхүүр рүү буулгах (нийцэл)
 const ATT_OLD={'Өдрийн ээлж':'day','Шөнийн ээлж':'night','Сунаж ажилласан':'ot','Шөнийн ээлжээр сунаж':'ot','Дуудагдан ажилласан':'callout','Амралттай':'rosteroff','Чөлөөтэй':'leaveu','Өвчтэй':'sick','Сургалттай':'office','Томилолттой':'office'};
 function attKey(r){if(!r)return null;if(r.type&&ATT2BY[r.type])return r.type;if(r.status&&ATT_OLD[r.status])return ATT_OLD[r.status];return null;}
-function attCodeOf(r){const k=attKey(r);if(!k)return '';const d=ATT2BY[k];if(!d.hrs)return d.code;const h=(r.hours!=null?r.hours:'');return d.k==='day'?String(h):String(h)+d.suf;}
+// Шөнийн цагийн хувь: зун (4-9 сар) 8 цаг, өвөл (10-3 сар) 12 цаг — Excel-ийн дагуу
+function nightPortionForDate(date){const mo=+String(date).slice(5,7);return (mo>=4&&mo<=9)?8:12;}
+function attCodeOf(r){if(r&&r.code)return r.code;const k=attKey(r);if(!k)return '';const d=ATT2BY[k];if(!d.hrs)return d.code;const h=(r.hours!=null?r.hours:'');
+  if(d.k==='day')return String(h);if(d.k==='night')return String(h)+'/'+nightPortionForDate(r.date||'');return String(h)+d.suf;}
 function attTone(r){const k=attKey(r);return k?ATT2BY[k].tone:'#5b6680';}
 // Эрхийн хяналт: ажил/гэмтлийн статусыг ахлах/мастер/инженер нар өөрчилнө
 const WO_EDIT_ROLES=['ADMIN','CHIEF','MASTER','EE','AUTO_CHIEF','AUTO_EE'];
@@ -351,6 +354,7 @@ function viewDash(){const k=kpis();
     ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF (цаг)',k.mtbf,'accent')}
     ${kpiCard('MTTR (мин)',k.mttr,'warn')}${kpiCard('Downtime (мин)',k.down,'danger')}
     ${kpiCard('Ажилласан цаг',k.workHours,'teal','Хүн тоо × 12ц')}${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}</div>
+  ${todayWorkingPanel()}
   ${activeFaultsPanel()}
   <div class="grid col3" style="grid-template-columns:2fr 1fr;margin-bottom:16px">
     <div class="glass card"><div class="section-title">📈 Өдрийн чиг хандлага — ажил &amp; гэмтэл</div><canvas id="cTrend" height="110"></canvas></div>
@@ -367,6 +371,14 @@ function activeFaultsPanel(){const af=DB.wos.filter(isActiveFault).sort((a,b)=>a
       ${af.map(w=>`<tr><td class="t-accent" style="font-family:monospace">${esc(w.equip||w.pd)||'—'}</td><td style="max-width:300px">${esc(w.desc)}</td><td>${photoThumbs(w.photos)}</td><td class="muted" style="font-size:12px">${w.date}</td><td>${woStatusCell(w)}</td></tr>`).join('')}
       </tbody></table></div><div class="note" style="margin-top:8px">Төлвийг "Засварласан" болгоход энэ жагсаалт болон дашбордоос автоматаар арилна.</div>`
       :'<div class="muted" style="padding:10px">Идэвхтэй гэмтэл алга — бүх төхөөрөмж хэвийн ✓</div>'}</div>`;}
+function todayWorkingPanel(){const today=iso(new Date());const recs=(DB.attendance||[]).filter(a=>a.date===today);
+  const day=[],night=[];recs.forEach(a=>{const k=attKey(a);const s=(DB.staff||[]).find(x=>x.id===a.staffId);if(!s)return;
+    if(k==='night')night.push(s);else if(['day','office','holiday','ot','callout'].includes(k))day.push(s);});
+  const grp=arr=>{const m={};arr.forEach(s=>{(m[s.role]=m[s.role]||[]).push(s.name);});const ks=ROLES.map(r=>r[0]).filter(r=>m[r]);
+    return ks.length?ks.map(r=>`<div style="margin:5px 0;font-size:13px"><span class="badge b-muted">${esc(roleLabel(r))}</span> ${m[r].map(esc).join(', ')}</div>`).join(''):'<div class="muted" style="padding:6px">Бүртгэл алга — Цаг бүртгэл дээр оруулна уу</div>';};
+  return `<div class="grid col2" style="margin-bottom:16px">
+    <div class="glass card"><div class="section-title">☀️ Өнөөдөр өдрөөр ажиллаж буй <span class="badge b-ok" style="margin-left:auto">${day.length}</span></div>${grp(day)}</div>
+    <div class="glass card"><div class="section-title">🌙 Өнөөдөр шөнөөр ажиллаж буй <span class="badge b-accent" style="margin-left:auto">${night.length}</span></div>${grp(night)}</div></div>`;}
 let charts=[];
 function destroyCharts(){charts.forEach(c=>c.destroy());charts=[];}
 function baseOpts(extra={}){const tick='#8ea2c0',gridC='#243049';
@@ -1048,7 +1060,7 @@ function setAttMonth(delta){const[y,m]=attMonth().split('-').map(Number);const d
 function monthDays(m){const[y,mo]=m.split('-').map(Number);return new Date(y,mo,0).getDate();}
 function attRec(sid,date){return (DB.attendance||[]).find(a=>a.staffId===sid&&a.date===date);}
 function upsertAtt(sid,date,type,hours,note){if(!DB.attendance)DB.attendance=[];if(!DB.seq.att)DB.seq.att=0;
-  const d=ATT2BY[type];const code=d?(!d.hrs?d.code:(d.k==='day'?String(hours):String(hours)+d.suf)):'';
+  const d=ATT2BY[type];const code=d?(!d.hrs?d.code:(d.k==='day'?String(hours):d.k==='night'?String(hours)+'/'+nightPortionForDate(date):String(hours)+d.suf)):'';
   const ex=attRec(sid,date);
   if(ex){ex.type=type;ex.hours=hours;ex.code=code;if(note!==undefined)ex.note=note;delete ex.status;delete ex.ot;delete ex.nh;delete ex.callout;}
   else DB.attendance.push({id:++DB.seq.att,staffId:sid,date,type,hours,code,note:note||''});}
@@ -1060,8 +1072,9 @@ function editAttCell(sid,date){if(!canEditAttend()){toast('Зөвхөн адми
     <div class="section-title">🕒 ${esc(s.name||'')} · ${date}</div>
     <label class="field"><span>Төлөв сонгох</span><select id="ec_type" onchange="attToggleHours()">${opts}</select></label>
     <label class="field" id="ec_hwrap" style="margin-top:8px"><span>Ажилласан цаг</span><input id="ec_hours" type="number" step="0.5" oninput="attToggleHours()" value="${ex&&ex.hours!=null?ex.hours:12}"></label>
+    <label class="field" style="margin-top:8px"><span>→ Хэдэн өдөр дараалан бичих (Excel шиг чирэх)</span><input id="ec_fill" type="number" min="1" value="1"></label>
     <label class="field" style="margin-top:8px"><span>Тэмдэглэл</span><input id="ec_note" value="${ex?esc(ex.note||''):''}"></label>
-    <div style="margin-top:10px" class="muted" style="font-size:12px">Excel код: <b id="ec_codeprev" class="t-accent"></b></div>
+    <div style="margin-top:10px;font-size:12px" class="muted">Excel код: <b id="ec_codeprev" class="t-accent"></b></div>
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" onclick="saveAttCell(${sid},'${date}')">Хадгалах</button>
       ${ex?`<button class="btn btn-ghost" onclick="clearAttCell(${sid},'${date}')">Арилгах</button>`:''}
@@ -1073,7 +1086,9 @@ function attToggleHours(){const t=document.getElementById('ec_type');if(!t)retur
 function saveAttCell(sid,date){const d=ATT2BY[document.getElementById('ec_type').value];if(!d)return;
   const hours=d.hrs?(parseFloat(document.getElementById('ec_hours').value)||0):0;
   const note=(document.getElementById('ec_note')||{value:''}).value;
-  upsertAtt(sid,date,d.k,hours,note);const md=document.getElementById('attModal');if(md)md.remove();save();toast('Хадгалагдлаа ✓');render();}
+  const fill=Math.max(1,parseInt((document.getElementById('ec_fill')||{value:'1'}).value,10)||1);
+  const base=new Date(date);for(let i=0;i<fill;i++){const dt=new Date(base);dt.setDate(base.getDate()+i);upsertAtt(sid,iso(dt),d.k,hours,note);}
+  const md=document.getElementById('attModal');if(md)md.remove();save();toast(fill>1?fill+' өдөр бичигдлээ ✓':'Хадгалагдлаа ✓');render();}
 function clearAttCell(sid,date){DB.attendance=(DB.attendance||[]).filter(a=>!(a.staffId===sid&&a.date===date));const md=document.getElementById('attModal');if(md)md.remove();save();render();}
 function autofillRotation(){if(!canEditAttend())return;ensureStaff();
   const names=DB.staff.map((s,i)=>(i+1)+'='+s.name).join('\n');
@@ -1086,13 +1101,22 @@ function autofillRotation(){if(!canEditAttend())return;ensureStaff();
     let k;if(d<7)k=nightFirst?'night':'day';else k=nightFirst?'day':'night';upsertAtt(sid,ds,k,12,'');}
   for(let d=14;d<28;d++){const dt=new Date(base);dt.setDate(base.getDate()+d);upsertAtt(sid,iso(dt),'rosteroff',0,'');}
   save();toast('14/14 хуваарь (7 өдрөөр+7 шөнөөр+14 амралт) бөглөгдлөө ✓');render();}
-function attMonthSummary(m){const map={};(DB.staff||[]).forEach(s=>map[s.id]={dayH:0,nightH:0,holidayH:0,otH:0,calloutH:0,roadH:0,leaveH:0,officeH:0,standby:0,sick:0,shiftl:0,off:0,other:0,total:0});
-  (DB.attendance||[]).filter(a=>a.date&&a.date.slice(0,7)===m).forEach(a=>{const t=map[a.staffId];if(!t)return;const k=attKey(a);if(!k)return;const d=ATT2BY[k];const h=+a.hours||0;
-    const b=d.bucket;
-    if(b==='day'){t.dayH+=h;t.total+=h;}else if(b==='night'){t.nightH+=h;t.total+=h;}else if(b==='holiday'){t.holidayH+=h;t.total+=h;}
-    else if(b==='ot'){t.otH+=h;t.total+=h;}else if(b==='callout'){t.calloutH+=h;t.total+=h;}
-    else if(b==='road'){t.roadH+=h;}else if(b==='leave'){t.leaveH+=h;}else if(b==='office'){t.officeH+=h;}
-    else if(b==='standby'){t.standby++;}else if(b==='sick'){t.sick++;}else if(b==='shiftl'){t.shiftl++;}else if(b==='off'){t.off++;}else t.other++;});
+// Excel-ийн дагуу зөв тооцоо: Үндсэн цаг = өдөрт min(цаг,8); Илүү цаг = max(цаг-8,0); Шөнийн цаг = ташуугийн ард (8/12)
+function attMonthSummary(m){const map={};(DB.staff||[]).forEach(s=>map[s.id]={base:0,ot:0,night:0,holiday:0,road:0,callout:0,office:0,leaveH:0,standby:0,sick:0,shiftl:0,off:0,other:0,worked:0,dayD:0,nightD:0});
+  (DB.attendance||[]).filter(a=>a.date&&a.date.slice(0,7)===m).forEach(a=>{const t=map[a.staffId];if(!t)return;const k=attKey(a);if(!k)return;const h=+a.hours||0;
+    if(k==='day'){t.base+=Math.min(h,8);t.ot+=Math.max(h-8,0);t.worked+=h;t.dayD++;}
+    else if(k==='night'){t.base+=Math.min(h,8);t.ot+=Math.max(h-8,0);t.night+=Math.min(h,nightPortionForDate(a.date));t.worked+=h;t.nightD++;}
+    else if(k==='holiday'){t.holiday+=h;t.worked+=h;}
+    else if(k==='ot'){t.ot+=h;t.worked+=h;}
+    else if(k==='callout'){t.callout+=h;t.worked+=h;}
+    else if(k==='road'||k==='roadh'){t.road+=h;}
+    else if(k==='office'||k==='officea'){t.base+=Math.min(h,8);t.ot+=Math.max(h-8,0);t.office+=h;t.worked+=h;}
+    else if(k==='leavep'){t.leaveH+=h;}
+    else if(k==='standby'||k==='standbyu'){t.standby++;}
+    else if(k==='sick'){t.sick++;}
+    else if(k==='shiftl'){t.shiftl++;}
+    else if(k==='rosteroff'){t.off++;}
+    else t.other++;});
   return map;}
 function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ хэсэгт хандах эрхгүй.</div>';
   ensureStaff();const m=attMonth();const nd=monthDays(m);const edit=canEditAttend();
@@ -1106,10 +1130,10 @@ function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ 
       cells+=`<td onclick="${edit?`editAttCell(${s.id},'${ds}')`:''}" title="${r&&k?esc(ATT2BY[k].lbl)+(r.hours?' · '+r.hours+'ц':''):''}" style="text-align:center;font-size:10px;font-weight:700;color:#0b0f1a;background:${r?col:'transparent'};${edit?'cursor:pointer;':''}border:1px solid var(--line)">${c}</td>`;}
     return `<tr><td style="position:sticky;left:0;background:#11182b;white-space:nowrap;font-size:12px">${esc(s.name)}</td><td style="text-align:center"><span class="badge b-muted">${esc(s.shift)}</span></td>${cells}</tr>`;}).join('');
   const sumRows=staff.map(s=>{const t=sum[s.id]||{};return `<tr><td style="white-space:nowrap">${esc(s.name)}</td><td style="text-align:center">${esc(s.shift)}</td>
-      <td style="text-align:center;font-weight:700" class="t-teal">${t.total||0}</td>
-      <td style="text-align:center">${t.dayH||0}</td><td style="text-align:center">${t.nightH||0}</td><td style="text-align:center">${t.holidayH||0}</td>
-      <td style="text-align:center" class="t-warn">${t.otH||0}</td><td style="text-align:center" class="t-danger">${t.calloutH||0}</td>
-      <td style="text-align:center">${t.roadH||0}</td><td style="text-align:center">${t.leaveH||0}</td><td style="text-align:center">${t.officeH||0}</td>
+      <td style="text-align:center;font-weight:700" class="t-teal">${t.worked||0}</td>
+      <td style="text-align:center;font-weight:600">${t.base||0}</td><td style="text-align:center" class="t-warn">${t.ot||0}</td>
+      <td style="text-align:center" class="t-accent">${t.night||0}</td><td style="text-align:center">${t.holiday||0}</td>
+      <td style="text-align:center" class="t-danger">${t.callout||0}</td><td style="text-align:center">${t.road||0}</td><td style="text-align:center">${t.office||0}</td><td style="text-align:center">${t.leaveH||0}</td>
       <td style="text-align:center">${t.standby||0}</td><td style="text-align:center">${t.sick||0}</td><td style="text-align:center">${t.shiftl||0}</td><td style="text-align:center">${t.off||0}</td></tr>`;}).join('');
   const legend=ATT2.map(d=>{const samp=d.hrs?(d.k==='day'?'N':'N'+d.suf):d.code;return `<span class="badge" style="background:${d.tone};color:#0b0f1a;margin:2px">${samp} = ${d.lbl}</span>`;}).join('');
   return `<div class="glass card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -1125,12 +1149,12 @@ function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ 
       ${kpiCard('Илүү/дуудлага',tc(['ot','callout']),'warn')}${kpiCard('Өвчтэй',tc(['sick']),'danger')}${kpiCard('Амралт (эа/а)',tc(['shiftl','rosteroff']),'muted')}</div>
     <div class="glass card" style="margin-bottom:14px"><div style="font-size:11.5px;line-height:2">${legend}</div></div>
     <div class="glass card" style="padding:0;overflow:auto;margin-bottom:16px"><table style="border-collapse:collapse"><thead><tr>${head}</tr></thead><tbody>${grid}</tbody></table></div>
-    <div class="glass card" style="padding:0;overflow:auto"><div class="section-title" style="padding:12px 14px 0">📊 Сарын нэгтгэл — ${m} <span class="muted" style="font-weight:400;font-size:12px">(цаг = өдөр+шөнө+баяр+илүү+дуудлага)</span></div>
-      <table><thead><tr><th>Ажилтан</th><th>Ээлж</th><th>Нийт цаг</th><th>Өдрийн</th><th>Шөнийн</th><th>Баярын</th><th>Илүү цаг</th><th>Дуудлага</th><th>Замын</th><th>Чөлөө</th><th>Оффис</th><th>Сул зог</th><th>Өвчтэй</th><th>Ээлж.амр</th><th>Ростер амр</th></tr></thead>
+    <div class="glass card" style="padding:0;overflow:auto"><div class="section-title" style="padding:12px 14px 0">📊 Сарын нэгтгэл — ${m} <span class="muted" style="font-weight:400;font-size:12px">(Үндсэн цаг = өдөрт дээд тал нь 8ц · илүүдэл нь Илүү цаг · Шөнийн цаг = ${nightPortionForDate(m+'-15')}ц)</span></div>
+      <table><thead><tr><th>Ажилтан</th><th>Ээлж</th><th>Нийт ажилласан</th><th>Үндсэн цаг</th><th>Илүү цаг</th><th>Шөнийн цаг</th><th>Баярын</th><th>Дуудлага</th><th>Замын</th><th>Оффис</th><th>Чөлөө</th><th>Сул зог</th><th>Өвчтэй</th><th>Ээлж.амр</th><th>Ростер амр</th></tr></thead>
       <tbody>${sumRows||'<tr><td colspan="15" class="muted" style="text-align:center;padding:18px">Ажилтан алга</td></tr>'}</tbody></table></div>`;}
 function exportAttend(){const m=attMonth();const sum=attMonthSummary(m);
-  const rows=[['Ажилтан','Албан тушаал','Ээлж','Нийт цаг','Өдрийн цаг','Шөнийн цаг','Баярын цаг','Илүү цаг','Дуудлага','Замын цаг','Чөлөө цаг','Оффис цаг','Сул зогсолт','Өвчтэй','Ээлжийн амралт','Ростер амралт']];
-  (DB.staff||[]).forEach(s=>{const t=sum[s.id]||{};rows.push([s.name,roleLabel(s.role),s.shift,t.total||0,t.dayH||0,t.nightH||0,t.holidayH||0,t.otH||0,t.calloutH||0,t.roadH||0,t.leaveH||0,t.officeH||0,t.standby||0,t.sick||0,t.shiftl||0,t.off||0]);});
+  const rows=[['Ажилтан','Албан тушаал','Ээлж','Нийт ажилласан цаг','Үндсэн цаг','Илүү цаг','Шөнийн цаг','Баярын цаг','Дуудлага','Замын цаг','Оффис цаг','Чөлөө цаг','Сул зогсолт','Өвчтэй','Ээлжийн амралт','Ростер амралт']];
+  (DB.staff||[]).forEach(s=>{const t=sum[s.id]||{};rows.push([s.name,roleLabel(s.role),s.shift,t.worked||0,t.base||0,t.ot||0,t.night||0,t.holiday||0,t.callout||0,t.road||0,t.office||0,t.leaveH||0,t.standby||0,t.sick||0,t.shiftl||0,t.off||0]);});
   downloadCSV('Tsag-burtgel_'+m,rows);}
 /* ---- Наряд / Work Order (бие даасан модуль, KPI авто) ---- */
 function woFind(id){return (DB.naryad||[]).find(w=>w.id===id);}
@@ -1138,7 +1162,7 @@ function woWorked(w){let ms=0;(w.sessions||[]).forEach(s=>{if(s.start&&s.end)ms+
 function staffName(id){const s=(DB.staff||[]).find(x=>x.id===id);return s?s.name:'?';}
 function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй');return;}
   if(!DB.naryad)DB.naryad=[];if(!DB.seq.naryad)DB.seq.naryad=0;
-  const sel=document.getElementById('wo_assign');const assignees=sel?Array.from(sel.selectedOptions).map(o=>+o.value):[];
+  const assignees=Array.from(document.querySelectorAll('.wo_as:checked')).map(c=>+c.value);
   DB.naryad.push({id:++DB.seq.naryad,no:'ND'+Date.now().toString().slice(-9),title:val('wo_title').trim(),desc:val('wo_desc').trim(),
     assignees,area:val('wo_area'),equip:val('wo_equip').trim(),pd:val('wo_pd').trim(),prio:val('wo_prio'),
     plannedStart:val('wo_pstart'),plannedFinish:val('wo_pfinish'),status:'Open',sessions:[],runningSince:null,
@@ -1196,7 +1220,8 @@ function woControls(w){if(!canOperateWo())return '';const b=[];
   return b.join(' ');}
 function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();const mgr=canCreateWo();
   const list=[...DB.naryad].sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(a.createdAt<b.createdAt?1:-1));
-  const staffOpts=[...DB.staff].sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name)).map(s=>`<option value="${s.id}">${esc(s.shift)} · ${esc(s.name)} (${esc(roleLabel(s.role))})</option>`).join('');
+  const assignStaff=[...DB.staff].filter(s=>!['ADMIN','CHIEF','AUTO_CHIEF'].includes(s.role)).sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name));
+  const staffChecks=assignStaff.map(s=>`<label style="display:inline-flex;align-items:center;gap:5px;margin:3px 10px 3px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="wo_as" value="${s.id}" style="width:auto"> ${esc(s.shift)}·${esc(s.name)} <span class="muted" style="font-size:11px">${esc(roleLabel(s.role))}</span></label>`).join('');
   const kpi=woKPI();const kArr=Object.values(kpi).filter(t=>t.done>0).sort((a,b)=>b.score-a.score);
   const rows=list.map(w=>{const ph=(w.photos&&w.photos.length)?photoThumbs(w.photos):'';
     return `<tr><td class="t-accent" style="font-family:monospace;font-size:11px">${esc(w.no)}</td>
@@ -1221,7 +1246,8 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();
         <label class="field"><span>Байршил</span><select id="wo_area"><option value="">—</option>${optList(DB.areas)}</select></label>
         <label class="field"><span>Эхлэх (товлосон)</span><input type="datetime-local" id="wo_pstart"></label>
         <label class="field"><span>Дуусах (товлосон)</span><input type="datetime-local" id="wo_pfinish"></label>
-        <label class="field"><span>Гүйцэтгэх ажилтан (олныг сонгож болно)</span><select id="wo_assign" multiple size="4">${staffOpts}</select></label>
+        <div class="field" style="grid-column:span 3"><span>Гүйцэтгэх ажилтан (нэг буюу хэд сонгоно · ахлах инженер хамаарахгүй)</span>
+          <div style="max-height:140px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:4px">${staffChecks||'<span class="muted">Ажилтан алга</span>'}</div></div>
       </div><div style="margin-top:10px">${dataListEquip()}${dataListPd()}<button class="btn">Наряд үүсгэх</button></div></form></div>`:''}
     <div class="glass card" style="padding:0;overflow:auto;margin-bottom:16px"><div class="section-title" style="padding:12px 14px 0">🧾 Нарядууд</div>
       <table><thead><tr><th>№</th><th>Ажил</th><th>Гүйцэтгэгч</th><th>Товлосон</th><th>Хугацаа</th><th>Төлөв</th><th>Үйлдэл</th></tr></thead>
