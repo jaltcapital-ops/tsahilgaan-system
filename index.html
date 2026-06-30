@@ -331,7 +331,7 @@ function renderPresets(){const ps=[['today','Өдөр'],['week','7 хоног'],
 
 /* ============ Навигаци ============ */
 const BASE_PAGES=[
-  ['dash','Нүүр / Dashboard','📊'],['notifs','Мэдэгдэл','🔔'],['new','Шинэ мэдээ оруулах','➕'],
+  ['dash','Нүүр / Dashboard','📊'],['notifs','Мэдэгдэл','🔔'],['daily','Өдөр тутмын тайлан','📅'],['news','Шинэ мэдээ','📰'],['new','Ажил/гэмтэл бүртгэх','📝'],
   ['energy','Эрчим хүчний хэрэглээ','🔋'],['work','Ажлын түүх / Хайлт','📋'],
   ['loto','Тусгаарлалт / LOTO','🔒'],['equip','Тоног төхөөрөмж','📦'],
   ['reliab','Найдвартай ажиллагаа','📈'],['report','Тайлан / Дүгнэлт','📅'],
@@ -377,6 +377,8 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='perms')v.innerHTML=viewPerms();
   else if(CUR==='audit')v.innerHTML=viewAudit();
   else if(CUR==='notifs'){v.innerHTML=viewNotifs();markNotifsRead();}
+  else if(CUR==='daily')v.innerHTML=viewDaily();
+  else if(CUR==='news')v.innerHTML=viewNews();
   else if(CUR==='rptcenter')v.innerHTML=viewReport2();
   else if(CUR==='wosheet')v.innerHTML=viewWoSheet();
   else if(CUR==='loto'){v.innerHTML=viewLoto();drawLotoCharts();}
@@ -401,6 +403,8 @@ function viewDash(){const k=kpis();
     ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF (цаг)',k.mtbf,'accent')}
     ${kpiCard('MTTR (мин)',k.mttr,'warn')}${kpiCard('Downtime (мин)',k.down,'danger')}
     ${kpiCard('Ажилласан цаг',k.workHours,'teal','Хүн тоо × 12ц')}${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}</div>
+  ${dailySummaryPanel()}
+  ${newsPanel()}
   ${execWidgets()}
   ${faultHeatmap()}
   ${todayWorkingPanel()}
@@ -1262,10 +1266,11 @@ function bulkRotation(){if(!canEditAttend())return;ensureStaff();
   save();toast('Бүх ажилтны хуваарь бөглөгдлөө ✓ ('+m+')');render();}
 /* ===== Roster Planner (Ээлжийн төлөвлөлт) ===== */
 const ROSTER_CODES=[
- {c:'Ө',k:'day',lbl:'Өдөр',tone:'#2fd07a',hrs:12},{c:'Ш',k:'night',lbl:'Шөнө',tone:'#2e8bff',hrs:12},
- {c:'А',k:'rosteroff',lbl:'Амралт',tone:'#5b6680',hrs:0},{c:'С',k:'ot',lbl:'Сунаж',tone:'#ffb020',hrs:12},
- {c:'Д',k:'callout',lbl:'Дуудагдсан',tone:'#ff7a45',hrs:12},{c:'Ч',k:'leaveu',lbl:'Чөлөө',tone:'#9aa7bd',hrs:0},
- {c:'Өв',k:'sick',lbl:'Өвчтэй',tone:'#ff4d4f',hrs:0},{c:'Т',k:'office',lbl:'Томилолт',tone:'#a78bfa',hrs:8}];
+ {c:'Ө',k:'day',lbl:'Өдөр (N)',tone:'#2fd07a',hrs:12},{c:'Ш',k:'night',lbl:'Шөнө (N/8)',tone:'#2e8bff',hrs:12},
+ {c:'а',k:'rosteroff',lbl:'Ростер амралт',tone:'#5b6680',hrs:0},{c:'эа',k:'shiftl',lbl:'Ээлжийн амралт',tone:'#7a869c',hrs:0},
+ {c:'Нс',k:'ot',lbl:'Илүү цаг/сунаж',tone:'#ffb020',hrs:12},{c:'Нд',k:'callout',lbl:'Дуудагдсан',tone:'#ff7a45',hrs:12},
+ {c:'Нз',k:'road',lbl:'Замын цаг',tone:'#1ec8c8',hrs:10},{c:'ч',k:'leaveu',lbl:'Чөлөө',tone:'#9aa7bd',hrs:0},
+ {c:'ө',k:'sick',lbl:'Өвчтэй',tone:'#ff4d4f',hrs:0},{c:'Т',k:'office',lbl:'Томилолт',tone:'#a78bfa',hrs:8}];
 const RC_BY=Object.fromEntries(ROSTER_CODES.map(x=>[x.c,x]));
 const canConfirmRoster=()=>ME&&['ADMIN','CHIEF','MASTER'].includes(ME.role);
 function rMonth(){return window._rosterMonth||iso(new Date()).slice(0,7);}
@@ -1290,7 +1295,7 @@ function rPattern(){if(!canEditAttend())return;ensureStaff();const r=ensureRoste
   r.base=base;rSnapshot();const off={'А':0,'Б':7,'В':14,'Г':21};const m=rMonth();const nd=monthDays(m);
   DB.staff.forEach(s=>{if(!r.cells[s.id])r.cells[s.id]={};const o=off[s.shift]||0;
     for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const diff=Math.round((new Date(ds)-bd)/86400000);
-      const ph=(((diff-o)%28)+28)%28;r.cells[s.id][ds]=ph<7?'Ө':(ph<14?'Ш':'А');}});
+      const ph=(((diff-o)%28)+28)%28;r.cells[s.id][ds]=ph<7?'Ө':(ph<14?'Ш':'а');}});
   save();toast('14/14 ростер үүслээ ✓ (offset авто)');render();}
 function rWarn(sid){const r=ensureRoster(rMonth());const c=r.cells[sid]||{};const m=rMonth();const nd=monthDays(m);let prev='',run=0,warn=false;
   for(let d=1;d<=nd;d++){const code=c[m+'-'+String(d).padStart(2,'0')]||'';if((code==='Ө'||code==='Ш')&&code===prev)run++;else run=(code==='Ө'||code==='Ш')?1:0;prev=code;if(run>7)warn=true;}return warn;}
@@ -1734,6 +1739,57 @@ function reportWord(){const a=document.getElementById('rptArea');if(!a)return;co
 function reportExcel(){const k=kpis();const nar=DB.naryad||[];const ens=DB.energy.filter(e=>inRange(e.date));const te=ens.reduce((s,e)=>s+(+e.energy||0),0),tf=ens.reduce((s,e)=>s+(+e.feed||0),0);
   const rows=[['Үзүүлэлт','Утга'],['Хугацаа',RANGE.from+' - '+RANGE.to],['Нийт ажил',k.total],['Хийгдсэн',k.done],['Идэвхтэй гэмтэл',k.activeFaults],['Нийт гэмтэл',k.faults],['Шуурхай дуудлага',k.emergency],['MTBF цаг',k.mtbf],['MTTR мин',k.mttr],['Downtime мин',k.down],['Availability %',k.avail],['Эрчим хүч кВт/цаг',te],['Тэжээл мян/тн',tf],['WO нээлттэй',nar.filter(w=>!WO_DONE(w)&&w.status!=='Cancelled').length],['WO дууссан',nar.filter(WO_DONE).length],['Тусгаарлалт/LOTO',(DB.loto||[]).length]];
   downloadCSV('Tailan_'+RANGE.from+'_'+RANGE.to,rows);}
+/* ---- Өдөр тутмын авто-тайлан ---- */
+function dailyReport(d){const inDay=ts=>ts&&String(ts).slice(0,10)===d;
+  const woClosed=(DB.naryad||[]).filter(w=>WO_DONE(w)&&inDay(w.finishedAt||w.completedAt)).length;
+  const faultsFixed=(DB.wos||[]).filter(w=>w.fault&&!isActiveFault(w)&&inDay(w.finish||w.date)).length;
+  const insp=(DB.inspections||[]).filter(i=>i.date===d).length;
+  const lotoApplied=(DB.loto||[]).filter(x=>inDay(x.appliedAt)).length;
+  const lotoStd=(DB.loto||[]).filter(x=>inDay(x.appliedAt)&&x.type==='Стандарт').length;
+  const lotoGrp=(DB.loto||[]).filter(x=>inDay(x.appliedAt)&&x.type==='Групп').length;
+  const pm=(DB.wos||[]).filter(w=>isPlanned(w.type)&&isClosed(w.status)&&w.date===d).length;
+  const works=(DB.wos||[]).filter(w=>w.date===d).length;
+  return {woClosed,faultsFixed,insp,lotoApplied,lotoStd,lotoGrp,pm,works};}
+function viewDaily(){const d=window._dailyDate||iso(new Date());const r=dailyReport(d);
+  return `<div class="glass card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div class="section-title" style="margin:0">📅 Өдөр тутмын ажлын тайлан <span class="badge b-ok" style="margin-left:6px">Авто үүсдэг</span></div>
+      <input type="date" value="${d}" onchange="window._dailyDate=this.value;render()" style="width:auto">
+      <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="window.print()">🖨️ Хэвлэх/PDF</button></div>
+    <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+      ${kpiCard('Хаагдсан Work Order',r.woClosed,'ok')}${kpiCard('Засварласан гэмтэл',r.faultsFixed,'danger')}${kpiCard('Тоног үзлэг',r.insp,'accent')}${kpiCard('PM ажил',r.pm,'teal')}</div>
+    <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+      ${kpiCard('LOTO стандарт',r.lotoStd,'warn')}${kpiCard('LOTO групп',r.lotoGrp,'warn')}${kpiCard('Нийт LOTO',r.lotoApplied,'muted')}${kpiCard('Нийт ажил/бичлэг',r.works,'muted')}</div>
+    <div class="glass card" id="rptArea"><div class="section-title">📝 Тайлангийн товч (${d})</div>
+      <ul style="line-height:2.1;font-size:14px;margin:8px 0">
+        <li>Өнөөдөр нийт <b>${r.woClosed}</b> Work Order хаагдсан.</li>
+        <li><b>${r.faultsFixed}</b> цахилгааны гэмтэл бүрэн засварлагдсан.</li>
+        <li><b>${r.insp}</b> тоног төхөөрөмжид үзлэг хийсэн.</li>
+        <li><b>${r.lotoStd}</b> стандарт LOTO, <b>${r.lotoGrp}</b> групп LOTO хийгдсэн.</li>
+        <li><b>${r.pm}</b> PM (төлөвлөгөөт) ажил төлөвлөгөөний дагуу биелсэн.</li>
+      </ul></div>`;}
+function dailySummaryPanel(){const d=iso(new Date());const r=dailyReport(d);
+  return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">📅 Өнөөдрийн ажлын товч (авто) <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="go('daily')">Дэлгэрэнгүй →</button></div>
+    <div style="font-size:14px;line-height:2">Хаагдсан WO: <b class="t-ok">${r.woClosed}</b> · Засварласан гэмтэл: <b class="t-danger">${r.faultsFixed}</b> · Үзлэг: <b class="t-accent">${r.insp}</b> · LOTO: <b>${r.lotoStd}</b> станд / <b>${r.lotoGrp}</b> групп · PM: <b class="t-teal">${r.pm}</b></div></div>`;}
+/* ---- Шинэ мэдээ (онцлох мэдээллийн самбар) ---- */
+const canPostNews=()=>ME&&['ADMIN','CHIEF','AUTO_CHIEF'].includes(ME.role);
+const NEWS_CAT=['Онцлох ажил','Аюулгүй ажиллагаа','Шинэ тоног','Сургалт','Шагнал/Урамшуулал','Их засвар','Шуурхай мэдээ'];
+function addNews(e){e.preventDefault();if(!canPostNews()){toast('Зөвхөн ахлах/админ нийтэлнэ');return;}if(!DB.news)DB.news=[];if(!DB.seq.news)DB.seq.news=0;
+  DB.news.push({id:++DB.seq.news,title:val('nw_title').trim(),body:val('nw_body').trim(),cat:val('nw_cat'),by:ME?ME.name:'',ts:new Date().toISOString().slice(0,16).replace('T',' ')});
+  audit('Шинэ мэдээ нийтлэв',val('nw_title').trim());pushNotif('*','📰 Шинэ мэдээ: '+val('nw_title').trim());notify('📰 ШИНЭ МЭДЭЭ\n'+val('nw_title').trim()+'\n'+(ME?ME.name:''));save();toast('Нийтлэгдлээ ✓');render();}
+function delNews(id){if(!canDelete()){toast('Зөвхөн админ');return;}if(!confirm('Энэ мэдээг устгах уу?'))return;DB.news=(DB.news||[]).filter(n=>n.id!==id);save();render();}
+function viewNews(){const list=(DB.news||[]).slice().reverse();
+  return `${canPostNews()?`<div class="glass card" style="margin-bottom:16px"><div class="section-title">📰 Шинэ мэдээ нийтлэх <span class="badge b-accent" style="margin-left:auto">Зөвхөн ахлах инженер / админ</span></div>
+    <form onsubmit="addNews(event)"><div class="col3">
+      <label class="field" style="grid-column:span 2"><span>Гарчиг *</span><input id="nw_title" required placeholder="ж: Төлөвлөгөөт их засвар эхэллээ"></label>
+      <label class="field"><span>Ангилал</span><select id="nw_cat">${optList(NEWS_CAT)}</select></label>
+      <label class="field" style="grid-column:span 3"><span>Агуулга</span><textarea id="nw_body" rows="3"></textarea></label>
+    </div><div style="margin-top:10px"><button class="btn">Нийтлэх</button></div></form></div>`:'<div class="note" style="margin-bottom:16px">Энд байгууллагын онцлох мэдээ, зарлал харагдана. Нийтлэх эрх зөвхөн ахлах инженер/админд.</div>'}
+    <div class="grid col2">${list.map(n=>`<div class="glass card"><div style="display:flex;align-items:start;gap:8px"><div style="flex:1"><span class="badge b-accent" style="font-size:10px">${esc(n.cat||'Мэдээ')}</span> <b style="font-size:15px">${esc(n.title)}</b></div>${canDelete()?delBtn('delNews('+n.id+')'):''}</div>
+      ${n.body?'<div style="margin-top:6px;white-space:pre-wrap;font-size:14px">'+esc(n.body)+'</div>':''}
+      <div class="muted" style="font-size:11px;margin-top:8px">✍️ ${esc(n.by)} · ${esc(n.ts)}</div></div>`).join('')||'<div class="muted" style="padding:20px">Мэдээ алга.</div>'}</div>`;}
+function newsPanel(){const list=(DB.news||[]).slice().reverse().slice(0,3);if(!list.length)return '';
+  return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">📰 Шинэ мэдээ <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="go('news')">Бүгд →</button></div>
+    ${list.map(n=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><span class="badge b-muted" style="font-size:10px">${esc(n.cat||'')}</span> <b>${esc(n.title)}</b> <span class="muted" style="font-size:11px">· ${esc(n.ts)}</span></div>`).join('')}</div>`;}
 function toast(msg){const t=document.createElement('div');t.className='glass toast';t.textContent=msg;
   document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
 
