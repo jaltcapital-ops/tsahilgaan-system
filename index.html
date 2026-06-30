@@ -342,7 +342,7 @@ const BASE_PAGES=[
 ];
 function pages(){let p=[...BASE_PAGES];
   if(!canSeeRef())p=p.filter(x=>x[0]!=='ref');
-  if(canSeeAttend()){const i=p.findIndex(x=>x[0]==='hr');p.splice(i>=0?i+1:p.length,0,['attend','Цаг бүртгэл','🕒']);}
+  if(canSeeAttend()){const i=p.findIndex(x=>x[0]==='hr');const ins=[['attend','Цаг бүртгэл','🕒']];if(canEditAttend())ins.push(['roster','Ээлжийн төлөвлөлт','🗓️']);p.splice(i>=0?i+1:p.length,0,...ins);}
   if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥'],['perms','Эрхийн тохиргоо','🛡️'],['audit','Аудит бүртгэл','📜']);return p;}
 let CUR='dash';
 function go(p){CUR=p;document.getElementById('side').classList.remove('open');renderNav();render();}
@@ -370,6 +370,7 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='qr')v.innerHTML=viewQR();
   else if(CUR==='hr')v.innerHTML=viewHR();
   else if(CUR==='attend')v.innerHTML=viewAttend();
+  else if(CUR==='roster')v.innerHTML=viewRoster();
   else if(CUR==='wo2')v.innerHTML=viewWO2();
   else if(CUR==='ref')v.innerHTML=viewRef();
   else if(CUR==='users'){v.innerHTML=viewUsers();loadUsers();}
@@ -1244,6 +1245,76 @@ function bulkRotation(){if(!canEditAttend())return;ensureStaff();
       let ph=(((diff-o)%28)+28)%28;let k=ph<7?'day':(ph<14?'night':'rosteroff');
       upsertAtt(s.id,ds,k,k==='rosteroff'?0:12,'');cnt++;}});
   save();toast('Бүх ажилтны хуваарь бөглөгдлөө ✓ ('+m+')');render();}
+/* ===== Roster Planner (Ээлжийн төлөвлөлт) ===== */
+const ROSTER_CODES=[
+ {c:'Ө',k:'day',lbl:'Өдөр',tone:'#2fd07a',hrs:12},{c:'Ш',k:'night',lbl:'Шөнө',tone:'#2e8bff',hrs:12},
+ {c:'А',k:'rosteroff',lbl:'Амралт',tone:'#5b6680',hrs:0},{c:'С',k:'ot',lbl:'Сунаж',tone:'#ffb020',hrs:12},
+ {c:'Д',k:'callout',lbl:'Дуудагдсан',tone:'#ff7a45',hrs:12},{c:'Ч',k:'leaveu',lbl:'Чөлөө',tone:'#9aa7bd',hrs:0},
+ {c:'Өв',k:'sick',lbl:'Өвчтэй',tone:'#ff4d4f',hrs:0},{c:'Т',k:'office',lbl:'Томилолт',tone:'#a78bfa',hrs:8}];
+const RC_BY=Object.fromEntries(ROSTER_CODES.map(x=>[x.c,x]));
+const canConfirmRoster=()=>ME&&['ADMIN','CHIEF','MASTER'].includes(ME.role);
+function rMonth(){return window._rosterMonth||iso(new Date()).slice(0,7);}
+function setRMonth(d){const[y,mo]=rMonth().split('-').map(Number);const dt=new Date(y,mo-1+d,1);window._rosterMonth=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');render();}
+function ensureRoster(m){if(!DB.roster)DB.roster={};if(!DB.roster[m])DB.roster[m]={base:'',confirmed:false,cells:{}};return DB.roster[m];}
+function rSnapshot(){if(!window._rUndo)window._rUndo=[];const r=ensureRoster(rMonth());window._rUndo.push(JSON.stringify(r.cells));if(window._rUndo.length>40)window._rUndo.shift();window._rRedo=[];}
+function rUndo(){if(!window._rUndo||!window._rUndo.length){toast('Буцаах алга');return;}const r=ensureRoster(rMonth());if(!window._rRedo)window._rRedo=[];window._rRedo.push(JSON.stringify(r.cells));r.cells=JSON.parse(window._rUndo.pop());save();render();}
+function rRedo(){if(!window._rRedo||!window._rRedo.length)return;const r=ensureRoster(rMonth());window._rUndo.push(JSON.stringify(r.cells));r.cells=JSON.parse(window._rRedo.pop());save();render();}
+function rPickCode(c){window._rPaint=c;document.querySelectorAll('.rpal').forEach(b=>b.classList.toggle('on',b.dataset.c===c));}
+function rSetCode(sid,date,code){const r=ensureRoster(rMonth());if(r.confirmed){toast('Баталгаажсан — эхлээд "Засварлах" дарна уу');return;}if(!r.cells[sid])r.cells[sid]={};
+  if(code==='')delete r.cells[sid][date];else r.cells[sid][date]=code;
+  const el=document.getElementById('rc_'+sid+'_'+date);if(el){const rc=RC_BY[code];el.textContent=code||'';el.style.background=rc?rc.tone:'transparent';el.style.color=code?'#0b0f1a':'#8ea2c0';}}
+function rPaintStart(sid,date){if(!canEditAttend())return;rSnapshot();window._rDrag=true;rSetCode(sid,date,window._rPaint||'Ө');}
+function rPaintMove(sid,date){if(window._rDrag)rSetCode(sid,date,window._rPaint||'Ө');}
+function rPaintEnd(){if(window._rDrag){window._rDrag=false;save();}}
+function rMenu(e,sid,date){if(!canEditAttend())return;e.preventDefault();const ex=document.getElementById('rCtx');if(ex)ex.remove();
+  const o=document.createElement('div');o.id='rCtx';o.style.cssText='position:fixed;z-index:500;left:'+Math.min(e.clientX,innerWidth-180)+'px;top:'+Math.min(e.clientY,innerHeight-260)+'px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,.5)';
+  o.innerHTML=ROSTER_CODES.map(rc=>`<div onclick="rSnapshot();rSetCode(${sid},'${date}','${rc.c}');save();document.getElementById('rCtx').remove()" style="padding:5px 12px;cursor:pointer;font-size:13px"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${rc.tone};margin-right:6px"></span>${rc.c} — ${rc.lbl}</div>`).join('')+`<div onclick="rSnapshot();rSetCode(${sid},'${date}','');save();document.getElementById('rCtx').remove()" style="padding:5px 12px;cursor:pointer;font-size:13px;color:#ff4d4f">✕ Арилгах</div>`;
+  document.body.appendChild(o);}
+function rPattern(){if(!canEditAttend())return;ensureStaff();const r=ensureRoster(rMonth());if(r.confirmed){toast('Баталгаажсан — Засварлах дарна уу');return;}
+  const base=prompt('Ростер эхлэх суурь огноо (YYYY-MM-DD):',r.base||rMonth()+'-01');if(!base)return;const bd=new Date(base);if(isNaN(bd)){toast('Огноо буруу');return;}
+  r.base=base;rSnapshot();const off={'А':0,'Б':7,'В':14,'Г':21};const m=rMonth();const nd=monthDays(m);
+  DB.staff.forEach(s=>{if(!r.cells[s.id])r.cells[s.id]={};const o=off[s.shift]||0;
+    for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const diff=Math.round((new Date(ds)-bd)/86400000);
+      const ph=(((diff-o)%28)+28)%28;r.cells[s.id][ds]=ph<7?'Ө':(ph<14?'Ш':'А');}});
+  save();toast('14/14 ростер үүслээ ✓ (offset авто)');render();}
+function rWarn(sid){const r=ensureRoster(rMonth());const c=r.cells[sid]||{};const m=rMonth();const nd=monthDays(m);let prev='',run=0,warn=false;
+  for(let d=1;d<=nd;d++){const code=c[m+'-'+String(d).padStart(2,'0')]||'';if((code==='Ө'||code==='Ш')&&code===prev)run++;else run=(code==='Ө'||code==='Ш')?1:0;prev=code;if(run>7)warn=true;}return warn;}
+function rConfirm(){if(!canConfirmRoster()){toast('Баталгаажуулах эрхгүй');return;}const r=ensureRoster(rMonth());r.confirmed=true;audit('Ростер баталгаажуулав',rMonth());save();toast('Ростер баталгаажлаа ✓');render();}
+function rUnconfirm(){if(!canConfirmRoster())return;const r=ensureRoster(rMonth());r.confirmed=false;save();render();}
+function rTransfer(){const r=ensureRoster(rMonth());if(!r.confirmed){toast('Эхлээд баталгаажуулна уу');return;}if(!canConfirmRoster()){toast('Эрхгүй');return;}
+  if(!confirm(rMonth()+' сарын ростерийг Цаг бүртгэлд шилжүүлэх үү? (давхар бичлэг үүсэхгүй)'))return;
+  let cnt=0;Object.keys(r.cells).forEach(sid=>{const sidN=+sid;Object.keys(r.cells[sid]).forEach(ds=>{const rc=RC_BY[r.cells[sid][ds]];if(!rc)return;upsertAtt(sidN,ds,rc.k,rc.hrs,'');cnt++;});});
+  audit('Ростер→Цаг бүртгэл',rMonth()+' ('+cnt+' нүд)');save();toast(cnt+' нүд Цаг бүртгэлд шилжлээ ✓');}
+function exportRoster(){const m=rMonth();const r=ensureRoster(m);const nd=monthDays(m);const head=['Ажилтан','Албан тушаал','Ээлж'];for(let d=1;d<=nd;d++)head.push(String(d));const rows=[head];
+  [...DB.staff].sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name)).forEach(s=>{const c=r.cells[s.id]||{};const row=[s.name,roleLabel(s.role),s.shift];for(let d=1;d<=nd;d++)row.push(c[m+'-'+String(d).padStart(2,'0')]||'');rows.push(row);});
+  downloadCSV('Roster_'+m,rows);}
+function viewRoster(){if(!canEditAttend())return '<div class="glass card">Энэ хэсэгт хандах эрхгүй (Админ/Ахлах/Мастер).</div>';ensureStaff();
+  const m=rMonth();const r=ensureRoster(m);const nd=monthDays(m);const q=(window._rQ||'').toLowerCase();if(!window._rPaint)window._rPaint='Ө';
+  const staff=[...DB.staff].filter(s=>!q||(s.name+' '+roleLabel(s.role)+' '+s.shift).toLowerCase().includes(q)).sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name));
+  const WD=['Ня','Да','Мя','Лх','Пү','Ба','Бя'];const ed=!r.confirmed;
+  let head='<th style="position:sticky;left:0;background:#11182b;z-index:3;min-width:150px">Ажилтан</th><th style="position:sticky;left:150px;background:#11182b;z-index:3">Ээлж</th>';
+  for(let d=1;d<=nd;d++){const wk=new Date(m+'-'+String(d).padStart(2,'0')).getDay();const we=wk===0||wk===6;head+='<th style="min-width:28px;font-size:10px;'+(we?'background:rgba(255,180,32,.14);':'')+'">'+d+'<div style="font-weight:400;font-size:9px;color:'+(we?'#ffb020':'#8ea2c0')+'">'+WD[wk]+'</div></th>';}
+  const grid=staff.map(s=>{const cells=r.cells[s.id]||{};let tds='';
+    for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const code=cells[ds]||'';const rc=RC_BY[code];
+      tds+=`<td id="rc_${s.id}_${ds}" ${ed?`onmousedown="rPaintStart(${s.id},'${ds}')" onmouseenter="rPaintMove(${s.id},'${ds}')" oncontextmenu="rMenu(event,${s.id},'${ds}')"`:''} style="text-align:center;font-size:11px;font-weight:700;cursor:${ed?'cell':'default'};user-select:none;color:${code?'#0b0f1a':'#8ea2c0'};background:${rc?rc.tone:'transparent'};border:1px solid var(--line)">${code}</td>`;}
+    const warn=rWarn(s.id)?' <span title="7-оос олон өдөр/шөнө дараалсан" style="color:#ff4d4f">⚠</span>':'';
+    return `<tr><td style="position:sticky;left:0;background:#11182b;white-space:nowrap;font-size:12px">${esc(s.name)}${warn}</td><td style="position:sticky;left:150px;background:#11182b;text-align:center"><span class="badge b-muted">${esc(s.shift)}</span></td>${tds}</tr>`;}).join('');
+  const palette=ROSTER_CODES.map(rc=>`<button class="rpal ${window._rPaint===rc.c?'on':''}" data-c="${rc.c}" onclick="rPickCode('${rc.c}')" style="border:2px solid ${window._rPaint===rc.c?'#fff':'transparent'};background:${rc.tone};color:#0b0f1a;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;margin:2px">${rc.c} ${rc.lbl}</button>`).join('')+`<button class="rpal" data-c="" onclick="rPickCode('')" style="border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12px;margin:2px;cursor:pointer">✕ Арилгах</button>`;
+  return `<div class="glass card" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-sm btn-ghost" onclick="setRMonth(-1)">◀</button><b style="font-size:15px">${m}</b><button class="btn btn-sm btn-ghost" onclick="setRMonth(1)">▶</button>
+      ${r.confirmed?'<span class="badge b-ok">✔ Баталгаажсан</span>':'<span class="badge b-warn">Ноорог</span>'}
+      <input placeholder="🔍 нэр / албан тушаал / ээлж" value="${esc(window._rQ||'')}" oninput="window._rQ=this.value;render()" style="max-width:220px">
+      <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        ${ed?'<button class="btn btn-sm" onclick="rPattern()">🔄 14/14 автомат</button>':''}
+        ${ed?'<button class="btn btn-sm btn-ghost" onclick="rUndo()" title="Ctrl+Z">↶</button>':''}
+        <button class="btn btn-sm btn-ghost" onclick="exportRoster()">📤 Excel</button>
+        <button class="btn btn-sm btn-ghost" onclick="window.print()">🖨 PDF</button>
+        ${canConfirmRoster()?(r.confirmed?'<button class="btn btn-sm btn-ghost" onclick="rUnconfirm()">✎ Засварлах</button>':'<button class="btn btn-sm" onclick="rConfirm()">✔ Баталгаажуулах</button>'):''}
+        ${canConfirmRoster()?'<button class="btn btn-sm" onclick="rTransfer()">→ Цаг бүртгэлд шилжүүлэх</button>':''}
+      </div></div>
+    <div class="glass card noprint" style="margin-bottom:12px"><b style="font-size:12px">Идэвхтэй код (нүд дээр дарж/чирж ононо):</b><div style="margin-top:6px">${palette}</div>
+      <div class="muted" style="font-size:11px;margin-top:6px">💡 Нүд дээр чирж олон өдөрт зэрэг ононо · Баруун товшилтоор код сонгоно · Ctrl+Z буцаана · ⚠ = 7-оос олон дараалсан · Баталгаажуулсны дараа л Цаг бүртгэлд шилжинэ</div></div>
+    <div class="glass card" style="padding:0;overflow:auto"><table style="border-collapse:collapse"><thead><tr>${head}</tr></thead><tbody>${grid||'<tr><td class="muted" style="padding:18px">Ажилтан алга</td></tr>'}</tbody></table></div>`;}
 // Excel-ийн дагуу зөв тооцоо: Үндсэн цаг = өдөрт min(цаг,8); Илүү цаг = max(цаг-8,0); Шөнийн цаг = ташуугийн ард (8/12)
 function attMonthSummary(m){const map={};(DB.staff||[]).forEach(s=>map[s.id]={base:0,ot:0,night:0,holiday:0,road:0,callout:0,office:0,leaveH:0,standby:0,sick:0,shiftl:0,off:0,other:0,worked:0,dayD:0,nightD:0});
   (DB.attendance||[]).filter(a=>a.date&&a.date.slice(0,7)===m).forEach(a=>{const t=map[a.staffId];if(!t)return;const k=attKey(a);if(!k)return;const h=+a.hours||0;
@@ -1289,7 +1360,7 @@ function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ 
       <span class="muted" style="font-size:12px">Нүд дээр дарж төлөв/цаг сонгоно (НБҮГ-ийн тэмдэглэгээ · KPI-тай холбогдохгүй)</span>
       <div style="margin-left:auto;display:flex;gap:8px">
         ${edit?'<button class="btn btn-sm btn-ghost" onclick="autofillRotation()">🔄 1 хүний 14/14</button>':''}
-        ${edit?'<button class="btn btn-sm" onclick="bulkRotation()">📋 Бүгдэд 14/14 төлөвлөх</button>':''}
+        ${edit?'<button class="btn btn-sm" onclick="go(\'roster\')">🗓️ Ээлжийн төлөвлөлт</button>':''}
         <button class="btn btn-sm btn-ghost" onclick="exportAttend()">📤 Excel татах</button></div></div>
     <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
       ${kpiCard('Өнөөдөр өдрөөр',tc(['day']),'ok')}${kpiCard('Өнөөдөр шөнөөр',tc(['night']),'accent')}
@@ -1660,7 +1731,10 @@ async function init(){if(!TOKEN)return;
   try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
   catch{localStorage.removeItem('tk');TOKEN=null;}}
 try{applyTheme();}catch(e){}
-document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();if(ME)openSearch();}if(e.key==='Escape'){closeSearch();}});
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();if(ME)openSearch();}if(e.key==='Escape'){closeSearch();const c=document.getElementById('rCtx');if(c)c.remove();}
+  if(CUR==='roster'&&(e.ctrlKey||e.metaKey)){if(e.key==='z'||e.key==='Z'){e.preventDefault();rUndo();}if(e.key==='y'||e.key==='Y'){e.preventDefault();rRedo();}}});
+document.addEventListener('mouseup',()=>{if(window._rDrag)rPaintEnd();});
+document.addEventListener('click',e=>{const c=document.getElementById('rCtx');if(c&&!c.contains(e.target))c.remove();});
 init();
 </script>
 </body>
