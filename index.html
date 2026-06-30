@@ -286,7 +286,7 @@ function kpis(){
     unplanned:wos.filter(w=>isUnplanned(w.type)).length,faults:faults.length,activeFaults:wos.filter(isActiveFault).length,byStatus,
     emergency:wos.filter(w=>w.type==='Шуурхай дуудлага').length,
     open:wos.filter(w=>!isClosed(w.status)).length,critical:wos.filter(w=>w.prio==='Эгзэгтэй'&&!isClosed(w.status)).length,
-    isoStd:isos.filter(i=>i.type==='Стандарт').length,isoGrp:isos.filter(i=>i.type==='Групп').length,
+    isoStd:(DB.loto||[]).filter(x=>x.type==='Стандарт').length,isoGrp:(DB.loto||[]).filter(x=>x.type==='Групп').length,
     down:totalDown,mttr:Math.round(mttr),mtbf:Math.round(mtbf),avail:Math.round(avail*100)/100,workHours,
     completion:wos.length?Math.round(done/wos.length*100):0,unitEnergy:unitEnergy(totEn,totFeed),totFeed,totEn};
 }
@@ -325,7 +325,7 @@ function renderPresets(){const ps=[['today','Өдөр'],['week','7 хоног'],
 const BASE_PAGES=[
   ['dash','Нүүр / Dashboard','📊'],['notifs','Мэдэгдэл','🔔'],['new','Шинэ мэдээ оруулах','➕'],
   ['energy','Эрчим хүчний хэрэглээ','🔋'],['work','Ажлын түүх / Хайлт','📋'],
-  ['iso','Тусгаарлалт / PD','🔒'],['loto','LOTO (Түгжих/Пайз)','🔐'],['equip','Тоног төхөөрөмж','📦'],
+  ['loto','Тусгаарлалт / LOTO','🔒'],['equip','Тоног төхөөрөмж','📦'],
   ['reliab','Найдвартай ажиллагаа','📈'],['report','Тайлан / Дүгнэлт','📅'],
   ['eng','Инженерийн гүйцэтгэл','👤'],['faults','Цахилгааны гэмтэл','⚡'],
   ['wo2','Наряд / Work Order','🧾'],
@@ -368,7 +368,7 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='perms')v.innerHTML=viewPerms();
   else if(CUR==='audit')v.innerHTML=viewAudit();
   else if(CUR==='notifs'){v.innerHTML=viewNotifs();markNotifsRead();}
-  else if(CUR==='loto')v.innerHTML=viewLoto();
+  else if(CUR==='loto'){v.innerHTML=viewLoto();drawLotoCharts();}
 }
 function kpiCard(lbl,val,tone,sub){return `<div class="glass card kpi"><div class="lbl">${lbl}</div>
   <div class="val t-${tone}">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;}
@@ -390,6 +390,8 @@ function viewDash(){const k=kpis();
     ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF (цаг)',k.mtbf,'accent')}
     ${kpiCard('MTTR (мин)',k.mttr,'warn')}${kpiCard('Downtime (мин)',k.down,'danger')}
     ${kpiCard('Ажилласан цаг',k.workHours,'teal','Хүн тоо × 12ц')}${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}</div>
+  ${execWidgets()}
+  ${faultHeatmap()}
   ${todayWorkingPanel()}
   ${rangeLoadPanel()}
   ${activeFaultsPanel()}
@@ -408,6 +410,22 @@ function activeFaultsPanel(){const af=DB.wos.filter(isActiveFault).sort((a,b)=>a
       ${af.map(w=>`<tr><td class="t-accent" style="font-family:monospace">${esc(w.equip||w.pd)||'—'}</td><td style="max-width:300px">${esc(w.desc)}</td><td>${photoThumbs(w.photos)}</td><td class="muted" style="font-size:12px">${w.date}</td><td>${woStatusCell(w)}</td></tr>`).join('')}
       </tbody></table></div><div class="note" style="margin-top:8px">Төлвийг "Засварласан" болгоход энэ жагсаалт болон дашбордоос автоматаар арилна.</div>`
       :'<div class="muted" style="padding:10px">Идэвхтэй гэмтэл алга — бүх төхөөрөмж хэвийн ✓</div>'}</div>`;}
+function execWidgets(){const nar=DB.naryad||[];const open=nar.filter(w=>!WO_DONE(w)&&w.status!=='Cancelled').length;
+  const closed=nar.filter(WO_DONE).length;const now=new Date();
+  const overdue=nar.filter(w=>!WO_DONE(w)&&w.status!=='Cancelled'&&w.plannedFinish&&new Date(w.plannedFinish)<now).length;
+  const faulty=new Set((DB.wos||[]).filter(isActiveFault).map(w=>w.equip||w.pd));
+  const eqH=(DB.equip&&DB.equip.length)?Math.round((DB.equip.length-faulty.size)/DB.equip.length*100):100;
+  const today=iso(new Date());const hr=(DB.attendance||[]).filter(a=>a.date===today&&['day','night','office','holiday','ot','callout'].includes(attKey(a))).length;
+  const low=(DB.parts||[]).filter(p=>+p.qty<=+(p.min||0)).length;
+  return `<div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px">
+    ${kpiCard('Нээлттэй WO',open,'accent')}${kpiCard('Дууссан WO',closed,'ok')}${kpiCard('Хугацаа хэтэрсэн WO',overdue,'danger')}
+    ${kpiCard('Тоног эрүүл мэнд',eqH+'%',eqH>=90?'ok':eqH>=70?'warn':'danger')}${kpiCard('Өнөөдөр ажиллаж буй',hr,'teal')}${kpiCard('Дуусч буй сэлбэг',low,'warn')}</div>`;}
+function faultHeatmap(){const map={};(DB.wos||[]).filter(w=>w.fault&&inRange(w.date)).forEach(w=>{map[w.date]=(map[w.date]||0)+1;});
+  const days=[];let d=new Date(RANGE.from),end=new Date(RANGE.to),g=0;while(d<=end&&g<100){const ds=iso(d);days.push({ds,c:map[ds]||0});d.setDate(d.getDate()+1);g++;}
+  const max=Math.max(1,...days.map(x=>x.c));const WD=['Ня','Да','Мя','Лх','Пү','Ба','Бя'];
+  return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">🔥 Гэмтлийн heatmap (өдрөөр)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:3px">${days.map(x=>{const a=x.c?(0.25+0.75*x.c/max):0;const we=[0,6].includes(new Date(x.ds).getDay());return `<div title="${x.ds} (${WD[new Date(x.ds).getDay()]}): ${x.c} гэмтэл" style="width:15px;height:15px;border-radius:3px;background:${x.c?'rgba(255,77,79,'+a+')':(we?'rgba(255,180,32,.08)':'rgba(255,255,255,.05)')}"></div>`;}).join('')}</div>
+    <div class="muted" style="font-size:11px;margin-top:6px">${RANGE.from} – ${RANGE.to} · улаан гүн = гэмтэл их · нийт ${days.reduce((s,x)=>s+x.c,0)} гэмтэл</div></div>`;}
 function todayWorkingPanel(){const today=iso(new Date());const recs=(DB.attendance||[]).filter(a=>a.date===today);
   const day=[],night=[];recs.forEach(a=>{const k=attKey(a);const s=(DB.staff||[]).find(x=>x.id===a.staffId);if(!s)return;
     if(k==='night')night.push(s);else if(['day','office','holiday','ot','callout'].includes(k))day.push(s);});
@@ -1398,9 +1416,14 @@ const lotoBadge={'Requested':'b-accent','Prepared':'b-teal','Applied':'b-warn','
 const lotoNext={'Requested':'Prepared','Prepared':'Applied','Applied':'Verified','Verified':'Released','Released':'Archived'};
 function lotoFind(id){return (DB.loto||[]).find(x=>x.id===id);}
 function canLoto(){return can('iso_create');}
+function ensureLoto(){if(!DB.loto)DB.loto=[];if(!DB.seq.loto)DB.seq.loto=0;
+  if(!DB._isoMig&&DB.isolations&&DB.isolations.length){DB.isolations.forEach(i=>{const st=isoStatus(i);
+    DB.loto.push({id:++DB.seq.loto,no:'ISO'+i.id,equip:i.equip||'',pd:isoPD(i)||'',lockNo:'',tagNo:'',point:'',source:'Цахилгаан',type:i.type||'Стандарт',
+      by:i.by||'',verifiedBy:'',status:st==='Сэргээсэн'?'Released':'Applied',requestedAt:i.date||'',appliedAt:i.date||'',verifiedAt:'',releasedAt:st==='Сэргээсэн'?(i.date||''):'',note:i.note||'',photos:[]});});
+    DB._isoMig=true;save();}}
 function createLoto(e){e.preventDefault();if(!canLoto()){toast('LOTO хийх эрхгүй');return;}
   if(!DB.loto)DB.loto=[];if(!DB.seq.loto)DB.seq.loto=0;
-  DB.loto.push({id:++DB.seq.loto,no:'LOTO'+Date.now().toString().slice(-8),equip:val('lo_equip').trim(),pd:val('lo_pd').trim(),
+  DB.loto.push({id:++DB.seq.loto,no:'LOTO'+Date.now().toString().slice(-8),equip:val('lo_equip').trim(),pd:val('lo_pd').trim(),type:val('lo_type'),
     lockNo:val('lo_lock').trim(),tagNo:val('lo_tag').trim(),point:val('lo_point').trim(),source:val('lo_source'),
     by:ME?ME.name:'',verifiedBy:'',status:'Requested',requestedAt:new Date().toISOString().slice(0,16),appliedAt:'',verifiedAt:'',releasedAt:'',
     note:val('lo_note').trim(),photos:(window._newPhotos||[]).slice()});
@@ -1412,7 +1435,10 @@ function lotoSet(id,status){const w=lotoFind(id);if(!w)return;if(!canLoto()){toa
   if(status==='Applied')w.appliedAt=now;
   if(status==='Verified'){w.verifiedAt=now;w.verifiedBy=ME?ME.name:'';}
   if(status==='Released')w.releasedAt=now;
-  audit('LOTO төлөв',w.no+' → '+lotoLabel[status]);save();toast('LOTO: '+lotoLabel[status]+' ✓');render();}
+  audit('LOTO төлөв',w.no+' → '+lotoLabel[status]);
+  if(status==='Applied')notify('🔒 ТУСГААРЛАЛТ ХИЙСЭН\nТоног: '+(w.equip||w.pd||'—')+(w.lockNo?'\nLock №: '+w.lockNo:'')+'\nЭрчмийн эх: '+(w.source||'—')+'\nХийсэн: '+(ME?ME.name:'')+'\nЦаг: '+now.replace('T',' '));
+  if(status==='Released')notify('🔓 ТУСГААРЛАЛТ СЭРГЭЭСЭН (чөлөөлсөн)\nТоног: '+(w.equip||w.pd||'—')+'\nЧөлөөлсөн: '+(ME?ME.name:'')+'\nЦаг: '+now.replace('T',' '));
+  save();toast('LOTO: '+lotoLabel[status]+' ✓');render();}
 function delLoto(id){if(!confirm('LOTO бүртгэл устгах уу?'))return;const w=lotoFind(id);audit('LOTO устгав',w?w.no:String(id));DB.loto=(DB.loto||[]).filter(x=>x.id!==id);save();render();}
 function exportLoto(){const rows=[['№','Тоног','PD','Lock №','Tag №','Тусгаарлах цэг','Эрчмийн эх','Хийсэн','Баталгаажуулсан','Төлөв','Хүсэлт','Тавьсан','Чөлөөлсөн','Тэмдэглэл']];
   (DB.loto||[]).forEach(w=>rows.push([w.no,w.equip,w.pd,w.lockNo,w.tagNo,w.point,w.source,w.by,w.verifiedBy,lotoLabel[w.status]||w.status,w.requestedAt,w.appliedAt,w.releasedAt,w.note]));downloadCSV('LOTO',rows);}
@@ -1420,23 +1446,29 @@ function lotoControls(w){if(!canLoto())return '';const b=[];const nx=lotoNext[w.
   if(nx)b.push(`<button class="btn btn-sm" onclick="lotoSet(${w.id},'${nx}')">${lotoLabel[nx]} →</button>`);
   if(w.status!=='Released'&&w.status!=='Archived'&&w.status!=='Cancelled')b.push(`<button class="btn btn-sm btn-ghost" onclick="lotoSet(${w.id},'Cancelled')">✖</button>`);
   return b.join(' ');}
-function viewLoto(){if(!DB.loto)DB.loto=[];const list=[...DB.loto].sort((a,b)=>(a.status==='Archived')-(b.status==='Archived')||(a.requestedAt<b.requestedAt?1:-1));
+function viewLoto(){ensureLoto();const list=[...DB.loto].sort((a,b)=>(a.status==='Archived')-(b.status==='Archived')||(a.requestedAt<b.requestedAt?1:-1));
   const cnt=s=>DB.loto.filter(x=>x.status===s).length;const active=DB.loto.filter(x=>['Applied','Verified'].includes(x.status)).length;
+  const std=DB.loto.filter(x=>x.type==='Стандарт').length,grp=DB.loto.filter(x=>x.type==='Групп').length;
   const ENERGY=['Цахилгаан','Механик','Гидравлик','Пневматик','Дулаан','Хий','Бусад'];
   const rows=list.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:11px">${esc(w.no)}</td>
     <td><b>${esc(w.equip||w.pd)||'—'}</b>${w.point?'<div class="muted" style="font-size:11px">Цэг: '+esc(w.point)+'</div>':''}${(w.photos&&w.photos.length)?'<div style="margin-top:3px">'+photoThumbs(w.photos)+'</div>':''}</td>
+    <td><span class="badge ${w.type==='Групп'?'b-warn':'b-teal'}">${esc(w.type||'Стандарт')}</span></td>
     <td style="font-size:12px">🔒 ${esc(w.lockNo)||'—'}<div class="muted">🏷️ ${esc(w.tagNo)||'—'}</div></td>
     <td style="font-size:12px">${esc(w.source)||'—'}</td>
     <td style="font-size:12px">${esc(w.by)||'—'}${w.verifiedBy?'<div class="muted" style="font-size:11px">✔ '+esc(w.verifiedBy)+'</div>':''}</td>
     <td><span class="badge ${lotoBadge[w.status]||'b-muted'}">${esc(lotoLabel[w.status]||w.status)}</span></td>
     <td style="white-space:nowrap">${lotoControls(w)} ${canDelete()?delBtn('delLoto('+w.id+')'):''}</td></tr>`).join('');
   return `${dataListEquip()}${dataListPd()}
-    <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
-      ${kpiCard('Нийт LOTO',DB.loto.length,'accent')}${kpiCard('Идэвхтэй (тавьсан)',active,'danger')}${kpiCard('Хүсэлт',cnt('Requested'),'warn')}${kpiCard('Чөлөөлсөн',cnt('Released'),'ok')}${kpiCard('Архив',cnt('Archived'),'muted')}</div>
-    ${canLoto()?`<div class="glass card" style="margin-bottom:16px"><div class="section-title">🔒 LOTO бүртгэх (Lock-Out / Tag-Out)</div>
+    <div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px">
+      ${kpiCard('Нийт',DB.loto.length,'accent')}${kpiCard('Идэвхтэй (тавьсан)',active,'danger')}${kpiCard('Стандарт',std,'teal')}${kpiCard('Групп',grp,'warn')}${kpiCard('Чөлөөлсөн',cnt('Released'),'ok')}${kpiCard('Хүсэлт',cnt('Requested'),'muted')}</div>
+    <div class="grid col2" style="margin-bottom:16px">
+      <div class="glass card"><div class="section-title">🔒 Төрлөөр</div><canvas id="loPie" height="150"></canvas></div>
+      <div class="glass card"><div class="section-title">📊 Төлөвөөр</div><canvas id="loBar" height="150"></canvas></div></div>
+    ${canLoto()?`<div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Тусгаарлалт / LOTO бүртгэх</div>
       <form onsubmit="createLoto(event)"><div class="col3">
         <label class="field"><span>Тоног / TAG</span><input id="lo_equip" list="equipList" placeholder="MG-101"></label>
         <label class="field"><span>PD дугаар</span><input id="lo_pd" list="pdList" placeholder="31PD-01"></label>
+        <label class="field"><span>Төрөл *</span><select id="lo_type" required>${optList(ISO_TYPES)}</select></label>
         <label class="field"><span>Эрчмийн эх үүсвэр *</span><select id="lo_source" required>${optList(ENERGY)}</select></label>
         <label class="field"><span>Lock № (цоож)</span><input id="lo_lock" placeholder="ж: L-014"></label>
         <label class="field"><span>Tag № (пайз)</span><input id="lo_tag" placeholder="ж: T-014"></label>
@@ -1444,11 +1476,18 @@ function viewLoto(){if(!DB.loto)DB.loto=[];const list=[...DB.loto].sort((a,b)=>(
         <label class="field" style="grid-column:span 2"><span>Тэмдэглэл</span><input id="lo_note"></label>
         <label class="field"><span>📷 Зураг</span><input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)"></label>
       </div><div id="photoPrev" style="margin-top:6px"></div>
-      <div style="margin-top:10px"><button class="btn">LOTO бүртгэх</button>
+      <div style="margin-top:10px"><button class="btn">Бүртгэх</button>
         <span class="muted" style="font-size:12px;margin-left:8px">Урсгал: Хүсэлт → Бэлтгэсэн → Тавьсан → Баталгаажуулсан → Чөлөөлсөн → Архив</span></div></form></div>`:''}
-    <div class="glass card" style="padding:0;overflow:auto"><div class="section-title" style="display:flex;padding:12px 14px 0">🔒 LOTO бүртгэлүүд <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="exportLoto()">📤 Excel</button></div>
-      <table><thead><tr><th>№</th><th>Тоног / Цэг</th><th>Lock/Tag</th><th>Эрчмийн эх</th><th>Хийсэн</th><th>Төлөв</th><th>Үйлдэл</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="7" class="muted" style="text-align:center;padding:18px">LOTO бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
+    <div class="glass card" style="padding:0;overflow:auto"><div class="section-title" style="display:flex;padding:12px 14px 0">🔒 Тусгаарлалт / LOTO бүртгэлүүд <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="exportLoto()">📤 Excel</button></div>
+      <table><thead><tr><th>№</th><th>Тоног / Цэг</th><th>Төрөл</th><th>Lock/Tag</th><th>Эрчмийн эх</th><th>Хийсэн</th><th>Төлөв</th><th>Үйлдэл</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="8" class="muted" style="text-align:center;padding:18px">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
+let lotoCharts=[];
+function drawLotoCharts(){lotoCharts.forEach(c=>c.destroy());lotoCharts=[];if(!DB.loto)return;
+  const std=DB.loto.filter(x=>x.type==='Стандарт').length,grp=DB.loto.filter(x=>x.type==='Групп').length;
+  const sc=LOTO_STATES.map(s=>DB.loto.filter(x=>x.status===s).length);
+  const pe=document.getElementById('loPie'),ba=document.getElementById('loBar');if(!pe||!ba)return;
+  lotoCharts.push(new Chart(pe,{type:'doughnut',data:{labels:['Стандарт','Групп'],datasets:[{data:[std,grp],backgroundColor:['#1ec8c8','#ffb020']}]},options:{responsive:true,plugins:{legend:{labels:{color:'#8ea2c0'}}}}}));
+  lotoCharts.push(new Chart(ba,{type:'bar',data:{labels:LOTO_STATES.map(s=>lotoLabel[s]),datasets:[{label:'Тоо',data:sc,backgroundColor:'#2e8bff'}]},options:baseOpts({plugins:{legend:{display:false}}})}));}
 function toast(msg){const t=document.createElement('div');t.className='glass toast';t.textContent=msg;
   document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
 
