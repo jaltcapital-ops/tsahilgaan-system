@@ -162,18 +162,18 @@ const PERMS=[
  ['dash_view','Dashboard харах'],['wo_view','Work Order харах'],['wo_create','Work Order үүсгэх'],
  ['wo_edit','Work Order засах / төлөв'],['wo_close','Work Order хаах / батлах'],['wo_delete','Work Order устгах'],
  ['fault_create','Гэмтэл бүртгэх'],['energy_create','Эрчим хүч бүртгэх'],['iso_create','Тусгаарлалт / LOTO хийх'],
- ['parts_edit','Сэлбэг засах'],['attend_view','Цаг бүртгэл харах'],['attend_edit','Цаг бүртгэл засах'],
+ ['iso_view','Тусгаарлалт бүртгэх'],['parts_edit','Сэлбэг засах'],['attend_view','Цаг бүртгэл харах'],['attend_edit','Цаг бүртгэл засах'],
  ['report_view','Тайлан харах'],['settings','Тохиргоо / Лавлах'],['user_manage','Хэрэглэгч удирдах']
 ];
 const DEFAULT_PERMS={
  ADMIN:'*',
- CHIEF:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','parts_edit','attend_view','attend_edit','report_view','settings'],
- MASTER:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','parts_edit','attend_view','report_view','settings'],
+ CHIEF:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','attend_edit','report_view','settings'],
+ MASTER:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','report_view','settings'],
  EE:['dash_view','wo_view','wo_edit','fault_create','energy_create','parts_edit','report_view','settings'],
- AUTO_CHIEF:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','parts_edit','attend_view','report_view','settings'],
+ AUTO_CHIEF:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','report_view','settings'],
  AUTO_EE:['dash_view','wo_view','wo_create','wo_edit','fault_create','energy_create','parts_edit','report_view','settings'],
  AUTO_TECH:['dash_view','wo_view','fault_create','report_view'],
- ISO_TECH:['dash_view','wo_view','fault_create','iso_create','report_view'],
+ ISO_TECH:['dash_view','wo_view','fault_create','iso_create','iso_view','report_view'],
  ELEC:['dash_view','wo_view','fault_create','report_view'],
  ELEC_ASST:['dash_view','wo_view','fault_create','report_view'],
  VIEWER:['dash_view','wo_view','report_view']
@@ -216,9 +216,11 @@ function attTone(r){const k=attKey(r);return k?ATT2BY[k].tone:'#5b6680';}
 // Эрхийн хяналт: ажил/гэмтлийн статусыг ахлах/мастер/инженер нар өөрчилнө
 const canEditWoStatus=()=>can('wo_edit');
 // Наряд / Work Order модуль
-const WO2_STATES=['Open','In Progress','Waiting','Completed','Cancelled'];
-const wo2Label={'Open':'Нээлттэй','In Progress':'Хийгдэж буй','Waiting':'Хүлээгдэж буй','Completed':'Дууссан','Cancelled':'Цуцалсан'};
-const wo2Badge={'Open':'b-accent','In Progress':'b-warn','Waiting':'b-muted','Completed':'b-ok','Cancelled':'b-danger'};
+const WO2_STATES=['New','Assigned','Accepted','In Progress','On Hold','Waiting Approval','Completed','Closed','Cancelled'];
+const wo2Label={'New':'Шинэ','Assigned':'Оноосон','Accepted':'Хүлээж авсан','In Progress':'Хийгдэж буй','On Hold':'Түр зогссон','Waiting Approval':'Батлахыг хүлээж буй','Completed':'Дууссан','Closed':'Хаасан','Cancelled':'Цуцалсан','Open':'Шинэ','Waiting':'Түр зогссон'};
+const wo2Badge={'New':'b-accent','Assigned':'b-accent','Accepted':'b-teal','In Progress':'b-warn','On Hold':'b-muted','Waiting Approval':'b-warn','Completed':'b-ok','Closed':'b-ok','Cancelled':'b-danger','Open':'b-accent','Waiting':'b-muted'};
+const WO_DONE=w=>w.status==='Completed'||w.status==='Closed';
+const SAFE_LABELS=[['toolbox','Toolbox уулзалт'],['ppe','PPE хэрэгсэл'],['jsa','Эрсдэлийн үнэлгээ (JSA)'],['loto','LOTO'],['permit','Зөвшөөрөл (Permit)'],['isolation','Цахилгаан тусгаарлалт'],['earthing','Газардуулга'],['energization','Тэжээл өгөх зөвшөөрөл']];
 const canCreateWo=()=>can('wo_create');
 const canOperateWo=()=>ME&&ME.role!=='VIEWER';
 const canSeeRef=()=>can('settings');
@@ -581,7 +583,7 @@ function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b
   <div class="grid col2" style="margin-bottom:16px">
     <div class="glass card"><div class="section-title">🔒 Тусгаарлалт төрлөөр</div><canvas id="iPie" height="150"></canvas></div>
     <div class="glass card"><div class="section-title">📊 Төлөвөөр</div><canvas id="iBar" height="150"></canvas></div></div>
-  <div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Тусгаарлалт бүртгэх</div>
+  ${can('iso_view')?`<div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Тусгаарлалт бүртгэх</div>
     <form onsubmit="addIso(event)"><div class="col3">
       <label class="field"><span>Огноо *</span><input type="date" id="i_date" required value="${iso(new Date())}"></label>
       <label class="field"><span>Ээлж *</span><select id="i_shift" required>${optList(SHIFT_DN)}</select></label>
@@ -591,7 +593,7 @@ function viewIso(){const isos=DB.isolations.filter(i=>inRange(i.date)).sort((a,b
       <label class="field"><span>PD дугаар</span><input id="i_pd" list="pdList" placeholder="ж: 31PD-01"></label>
       <label class="field"><span>Хийсэн хүн</span><select id="i_by"><option value="">—</option>${optList(DB.isoPersons)}</select></label>
       <label class="field" style="grid-column:span 2"><span>Тэмдэглэл</span><input id="i_note"></label>
-    </div><div style="margin-top:12px"><button class="btn">Бүртгэх</button></div></form></div>
+    </div><div style="margin-top:12px"><button class="btn">Бүртгэх</button></div></form></div>`:''}
   ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportIso()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>Огноо</th><th>Ээлж</th><th>Төрөл</th><th>Төхөөрөмж</th><th>Төлөв${isoHint}</th><th>PD №</th><th>Хийсэн хүн</th><th>Тэмдэглэл</th><th></th></tr></thead>
@@ -606,8 +608,10 @@ function drawIsoCharts(){isoCharts.forEach(c=>c.destroy());isoCharts=[];const is
   const sc=ISO_STATUS.map(s=>isos.filter(i=>isoStatus(i)===s).length);
   isoCharts.push(new Chart(iPie,{type:'doughnut',data:{labels:['Стандарт','Групп'],datasets:[{data:[std,grp],backgroundColor:['#1ec8c8','#ffb020']}]},options:{responsive:true,plugins:{legend:{labels:{color:'#8ea2c0'}}}}}));
   isoCharts.push(new Chart(iBar,{type:'bar',data:{labels:ISO_STATUS,datasets:[{label:'Тоо',data:sc,backgroundColor:['#ff4d4f','#2fd07a','#8ea2c0']}]},options:baseOpts({plugins:{legend:{display:false}}})}));}
-function addIso(e){e.preventDefault();DB.isolations.push({id:++DB.seq.iso,date:val('i_date'),shift:val('i_shift'),type:val('i_type'),
-    equip:val('i_equip'),status:val('i_status'),pd:val('i_pd'),by:val('i_by'),note:val('i_note')});save();toast('Тусгаарлалт бүртгэгдлээ ✓');render();}
+function addIso(e){e.preventDefault();if(!can('iso_view')){toast('Тусгаарлалт бүртгэх эрхгүй');return;}
+  DB.isolations.push({id:++DB.seq.iso,date:val('i_date'),shift:val('i_shift'),type:val('i_type'),
+    equip:val('i_equip'),status:val('i_status'),pd:val('i_pd'),by:val('i_by'),note:val('i_note')});
+  audit('Тусгаарлалт бүртгэв',val('i_equip')+' · '+val('i_status'));save();toast('Тусгаарлалт бүртгэгдлээ ✓');render();}
 function delIso(id){if(!confirm('Устгах уу?'))return;DB.isolations=DB.isolations.filter(i=>i.id!==id);save();render();}
 function exportIso(){const rows=[['Огноо','Ээлж','Төрөл','Төхөөрөмж','Төлөв','PD №','Хийсэн хүн','Тэмдэглэл']];
   DB.isolations.filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(i=>rows.push([i.date,isoShift(i),i.type,i.equip,isoStatus(i),isoPD(i),i.by,i.note]));
@@ -1222,15 +1226,22 @@ function staffName(id){const s=(DB.staff||[]).find(x=>x.id===id);return s?s.name
 function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй');return;}
   if(!DB.naryad)DB.naryad=[];if(!DB.seq.naryad)DB.seq.naryad=0;
   const assignees=Array.from(document.querySelectorAll('.wo_as:checked')).map(c=>+c.value);
+  const safety={};SAFE_LABELS.forEach(([k])=>{const el=document.getElementById('saf_'+k);safety[k]=!!(el&&el.checked);});
   DB.naryad.push({id:++DB.seq.naryad,no:'ND'+Date.now().toString().slice(-9),title:val('wo_title').trim(),desc:val('wo_desc').trim(),
     assignees,area:val('wo_area'),equip:val('wo_equip').trim(),pd:val('wo_pd').trim(),prio:val('wo_prio'),
-    plannedStart:val('wo_pstart'),plannedFinish:val('wo_pfinish'),status:'Open',sessions:[],runningSince:null,
-    completeNote:'',photos:[],parts:[],createdBy:ME?ME.name:'',createdAt:new Date().toISOString().slice(0,16),actualStart:'',finishedAt:''});
+    plannedStart:val('wo_pstart'),plannedFinish:val('wo_pfinish'),status:assignees.length?'Assigned':'New',sessions:[],runningSince:null,
+    safety,files:[],acceptedBy:'',rejectNote:'',completeNote:'',photos:[],parts:[],createdBy:ME?ME.name:'',createdAt:new Date().toISOString().slice(0,16),actualStart:'',completedAt:'',finishedAt:''});
   audit('Наряд үүсгэв',val('wo_title').trim());save();toast('Наряд үүслээ ✓');render();}
-function woStart(id){const w=woFind(id);if(!w)return;if(!w.sessions)w.sessions=[];w.runningSince=new Date().toISOString().slice(0,16);w.status='In Progress';if(!w.actualStart)w.actualStart=w.runningSince;save();toast('Ажил эхэллээ ▶');render();}
-function woPause(id){const w=woFind(id);if(!w)return;if(w.runningSince){w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}w.status='Waiting';save();toast('Түр зогссон ⏸');render();}
+function isAssignedToMe(w){if(!ME)return false;const me=(DB.staff||[]).filter(s=>s.name===ME.name).map(s=>s.id);return (w.assignees||[]).some(id=>me.includes(id));}
+function canOperateThis(w){return ME&&(canCreateWo()||can('wo_close')||isAssignedToMe(w));}
+function woAccept(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}w.status='Accepted';w.acceptedBy=ME?ME.name:'';w.acceptedAt=new Date().toISOString().slice(0,16);audit('Наряд хүлээж авав',w.no);save();toast('Хүлээж авлаа ✓');render();}
+function woStart(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}if(!w.sessions)w.sessions=[];w.runningSince=new Date().toISOString().slice(0,16);w.status='In Progress';if(!w.actualStart)w.actualStart=w.runningSince;save();toast('Ажил эхэллээ ▶');render();}
+function woPause(id){const w=woFind(id);if(!w)return;if(w.runningSince){w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}w.status='On Hold';save();toast('Түр зогссон ⏸');render();}
 function woResume(id){const w=woFind(id);if(!w)return;w.runningSince=new Date().toISOString().slice(0,16);w.status='In Progress';save();toast('Үргэлжиллээ ▶');render();}
-function woComplete(id){const w=woFind(id);if(!w)return;window._newPhotos=[];window._woParts=[];
+function approveWO(id){const w=woFind(id);if(!w)return;if(!can('wo_close')){toast('Батлах эрхгүй');return;}w.status='Completed';w.finishedAt=w.completedAt||new Date().toISOString().slice(0,16);audit('Наряд баталгаажуулав',w.no);save();toast('Баталгаажлаа ✓');render();}
+function rejectWO(id){const w=woFind(id);if(!w)return;if(!can('wo_close')){toast('Эрхгүй');return;}const r=prompt('Татгалзах шалтгаан:');if(r===null)return;w.status='In Progress';w.rejectNote=r;w.completedAt='';audit('Наряд татгалзав',w.no+' · '+r);save();toast('Татгалзаж, In Progress болголоо');render();}
+function closeWO(id){const w=woFind(id);if(!w)return;if(!can('wo_close')){toast('Эрхгүй');return;}w.status='Closed';audit('Наряд хаав',w.no);save();toast('Хаагдлаа ✓');render();}
+function woComplete(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}window._newPhotos=[];window._woParts=[];window._woFiles=[];
   const partsOpts=(DB.parts||[]).map(p=>`<option value="${p.id}">${esc(p.name)} (${num(p.qty)} ${esc(p.unit||'ш')})</option>`).join('');
   const o=document.createElement('div');o.id='woModal';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:250;display:grid;place-items:center;padding:16px';
   o.innerHTML=`<div class="glass card" style="max-width:520px;width:100%;max-height:90vh;overflow:auto">
@@ -1241,8 +1252,19 @@ function woComplete(id){const w=woFind(id);if(!w)return;window._newPhotos=[];win
       <div style="display:flex;gap:6px;margin-top:4px"><select id="wo_part" style="flex:1">${partsOpts||'<option value="">— сэлбэг алга —</option>'}</select>
         <input id="wo_pqty" type="number" step="0.01" value="1" style="width:80px"><button type="button" class="btn btn-sm" onclick="woAddPartRow()">+</button></div>
       <div id="woPartList" style="margin-top:6px"></div></div>
-    <div style="margin-top:14px;display:flex;gap:8px"><button class="btn" onclick="finalizeWO(${id})">Дуусгаж хадгалах</button>
-      <button class="btn btn-ghost" onclick="document.getElementById('woModal').remove()">Болих</button></div></div>`;
+    <label class="field" style="margin-top:8px"><span>📎 Файл хавсаргах (PDF/Excel/Word, ≤3MB)</span><input type="file" accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,image/*" multiple onchange="handleWoFiles(this)"><div id="woFileList" style="margin-top:6px"></div></label>
+    <div style="margin-top:14px;display:flex;gap:8px"><button class="btn" onclick="finalizeWO(${id})">Дуусгаж, батлуулахаар илгээх</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('woModal').remove()">Болих</button></div>
+    <div class="note" style="margin-top:8px;font-size:12px">Дуусгасны дараа <b>Мастер/Ахлах баталгаажуулна</b>. Татгалзвал буцаад "Хийгдэж буй" болно.</div></div>`;
+  document.body.appendChild(o);}
+function handleWoFiles(input){const files=Array.from(input.files||[]);if(!window._woFiles)window._woFiles=[];
+  files.forEach(f=>{if(f.size>3*1024*1024){toast(f.name+' хэт том (>3MB)');return;}const r=new FileReader();r.onload=e=>{window._woFiles.push({name:f.name,type:f.type,data:e.target.result});renderWoFiles();};r.readAsDataURL(f);});input.value='';}
+function renderWoFiles(){const el=document.getElementById('woFileList');if(!el)return;el.innerHTML=(window._woFiles||[]).map((f,i)=>`<span class="badge b-muted" style="margin:2px">📎 ${esc(f.name)} <a onclick="window._woFiles.splice(${i},1);renderWoFiles()" style="cursor:pointer;color:#ff4d4f">✕</a></span>`).join('');}
+function woFileLink(f){return `<a href="${f.data}" download="${esc(f.name)}" class="badge b-accent" style="margin:2px;text-decoration:none">📎 ${esc(f.name)}</a>`;}
+function showWoQR(id){const w=woFind(id);if(!w)return;if(typeof qrcode==='undefined'){toast('QR сан алга');return;}
+  const url=location.origin+'/?wo='+id;const img=qrDataUrl(url,5);
+  const o=document.createElement('div');o.id='woQrModal';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;display:grid;place-items:center;padding:16px';o.onclick=function(e){if(e.target===o)o.remove();};
+  o.innerHTML=`<div class="glass card" style="text-align:center;max-width:340px"><div class="section-title">🔲 ${esc(w.no)}</div><img src="${img}" style="width:240px;height:240px;background:#fff;border-radius:8px;padding:6px"><div class="muted" style="font-size:12px;margin-top:8px">${esc(w.title||'')} · уншуулбал нээгдэнэ</div><div style="margin-top:10px"><button class="btn btn-sm btn-ghost" onclick="document.getElementById('woQrModal').remove()">Хаах</button></div></div>`;
   document.body.appendChild(o);}
 function woAddPartRow(){const sel=document.getElementById('wo_part');const id=+sel.value;const q=parseFloat(document.getElementById('wo_pqty').value)||0;
   if(!id||q<=0){toast('Сэлбэг/тоо буруу');return;}if(!window._woParts)window._woParts=[];window._woParts.push({partId:id,qty:q});renderWoParts();}
@@ -1250,15 +1272,15 @@ function renderWoParts(){const el=document.getElementById('woPartList');if(!el)r
 function finalizeWO(id){const w=woFind(id);if(!w)return;
   if(w.runningSince){if(!w.sessions)w.sessions=[];w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}
   w.completeNote=(document.getElementById('wo_cnote')||{value:''}).value||'';
-  w.photos=(window._newPhotos||[]).slice();w.parts=(window._woParts||[]).slice();
+  w.photos=(window._newPhotos||[]).slice();w.parts=(window._woParts||[]).slice();w.files=(window._woFiles||[]).slice();
   w.parts.forEach(pp=>{const pt=(DB.parts||[]).find(x=>x.id===pp.partId);if(pt){pt.qty=Math.max(0,+pt.qty-pp.qty);if(!DB.partUsage)DB.partUsage=[];if(!DB.seq.usage)DB.seq.usage=0;DB.partUsage.push({id:++DB.seq.usage,partId:pt.id,date:iso(new Date()),qty:pp.qty,by:ME?ME.name:'',note:'WO '+w.no});}});
-  w.status='Completed';w.finishedAt=new Date().toISOString().slice(0,16);
-  window._newPhotos=[];window._woParts=[];const md=document.getElementById('woModal');if(md)md.remove();
-  audit('Наряд дуусгав',w.no+' · '+woWorked(w)+' мин');save();toast('Ажил дууслаа ✓ · хугацаа '+woWorked(w)+' мин');render();}
-function woCancel(id){const w=woFind(id);if(!w)return;if(!confirm('Энэ нарядыг цуцлах уу?'))return;if(w.runningSince){w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}w.status='Cancelled';save();render();}
+  w.status='Waiting Approval';w.completedAt=new Date().toISOString().slice(0,16);
+  window._newPhotos=[];window._woParts=[];window._woFiles=[];const md=document.getElementById('woModal');if(md)md.remove();
+  audit('Наряд дуусгав (батлуулахаар)',w.no+' · '+woWorked(w)+' мин');save();toast('Дууслаа — Мастер баталгаажуулахыг хүлээж байна ✓');render();}
+function woCancel(id){const w=woFind(id);if(!w)return;if(!confirm('Энэ нарядыг цуцлах уу?'))return;if(w.runningSince){w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}w.status='Cancelled';audit('Наряд цуцлав',w.no);save();render();}
 function delWO(id){if(!confirm('Энэ нарядыг устгах уу?'))return;const w=woFind(id);audit('Наряд устгав',w?w.no:String(id));DB.naryad=(DB.naryad||[]).filter(w=>w.id!==id);save();render();}
 function woKPI(){const map={};(DB.staff||[]).forEach(s=>map[s.id]={name:s.name,role:s.role,shift:s.shift,done:0,onTime:0,minutes:0});
-  (DB.naryad||[]).filter(w=>w.status==='Completed').forEach(w=>{const mins=woWorked(w);
+  (DB.naryad||[]).filter(WO_DONE).forEach(w=>{const mins=woWorked(w);
     (w.assignees||[]).forEach(sid=>{const t=map[sid];if(!t)return;t.done++;t.minutes+=mins;
       if(w.plannedFinish&&w.finishedAt&&new Date(w.finishedAt)<=new Date(w.plannedFinish))t.onTime++;});});
   const arr=Object.values(map);const maxDone=Math.max(1,...arr.map(t=>t.done));
@@ -1269,16 +1291,20 @@ function woKPI(){const map={};(DB.staff||[]).forEach(s=>map[s.id]={name:s.name,r
 function opsCounts(){const today=iso(new Date());const att=(DB.attendance||[]).filter(a=>a.date===today);const c=st=>att.filter(a=>a.status===st).length;const nar=DB.naryad||[];
   return {dayW:c('Өдрийн ээлж'),nightW:c('Шөнийн ээлж'),off:c('Амралттай'),sick:c('Өвчтэй'),leave:c('Чөлөөтэй'),
     ext:att.filter(a=>a.status==='Сунаж ажилласан'||a.status==='Шөнийн ээлжээр сунаж').length,callout:c('Дуудагдан ажилласан'),
-    open:nar.filter(w=>w.status==='Open').length,prog:nar.filter(w=>w.status==='In Progress').length,wait:nar.filter(w=>w.status==='Waiting').length,
-    done:nar.filter(w=>w.status==='Completed').length};}
-function woControls(w){if(!canOperateWo())return '';const b=[];
-  if(w.status==='Open')b.push(`<button class="btn btn-sm" onclick="woStart(${w.id})">▶ Эхлэх</button>`);
-  if(w.status==='In Progress'){b.push(`<button class="btn btn-sm btn-ghost" onclick="woPause(${w.id})">⏸ Зогсоох</button>`);b.push(`<button class="btn btn-sm" onclick="woComplete(${w.id})">✅ Дуусгах</button>`);}
-  if(w.status==='Waiting'){b.push(`<button class="btn btn-sm" onclick="woResume(${w.id})">▶ Үргэлжлүүлэх</button>`);b.push(`<button class="btn btn-sm" onclick="woComplete(${w.id})">✅ Дуусгах</button>`);}
-  if(canCreateWo()&&w.status!=='Completed'&&w.status!=='Cancelled')b.push(`<button class="btn btn-sm btn-ghost" onclick="woCancel(${w.id})">✖ Цуцлах</button>`);
+    open:nar.filter(w=>['New','Assigned','Accepted'].includes(w.status)).length,prog:nar.filter(w=>w.status==='In Progress').length,wait:nar.filter(w=>['On Hold','Waiting Approval'].includes(w.status)).length,
+    done:nar.filter(WO_DONE).length};}
+function woControls(w){const b=[];const mine=canOperateThis(w);
+  if(mine&&(w.status==='New'||w.status==='Assigned'))b.push(`<button class="btn btn-sm" onclick="woAccept(${w.id})">✋ Хүлээж авах</button>`);
+  if(mine&&w.status==='Accepted')b.push(`<button class="btn btn-sm" onclick="woStart(${w.id})">▶ Эхлэх</button>`);
+  if(mine&&w.status==='In Progress'){b.push(`<button class="btn btn-sm btn-ghost" onclick="woPause(${w.id})">⏸ Зогсоох</button>`);b.push(`<button class="btn btn-sm" onclick="woComplete(${w.id})">✅ Дуусгах</button>`);}
+  if(mine&&w.status==='On Hold'){b.push(`<button class="btn btn-sm" onclick="woResume(${w.id})">▶ Үргэлжлүүлэх</button>`);b.push(`<button class="btn btn-sm" onclick="woComplete(${w.id})">✅ Дуусгах</button>`);}
+  if(can('wo_close')&&w.status==='Waiting Approval'){b.push(`<button class="btn btn-sm" onclick="approveWO(${w.id})">✔ Батлах</button>`);b.push(`<button class="btn btn-sm btn-ghost" onclick="rejectWO(${w.id})">✖ Татгалзах</button>`);}
+  if(can('wo_close')&&w.status==='Completed')b.push(`<button class="btn btn-sm btn-ghost" onclick="closeWO(${w.id})">🔒 Хаах</button>`);
+  if(canCreateWo()&&!WO_DONE(w)&&w.status!=='Cancelled'&&w.status!=='Waiting Approval')b.push(`<button class="btn btn-sm btn-ghost" onclick="woCancel(${w.id})">✖ Цуцлах</button>`);
+  b.push(`<button class="btn btn-sm btn-ghost" onclick="showWoQR(${w.id})">🔲 QR</button>`);
   return b.join(' ');}
 function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();const mgr=canCreateWo();
-  const list=[...DB.naryad].sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(a.createdAt<b.createdAt?1:-1));
+  const list=[...DB.naryad].sort((a,b)=>(WO_DONE(a)?1:0)-(WO_DONE(b)?1:0)||(a.createdAt<b.createdAt?1:-1));
   const assignStaff=[...DB.staff].filter(s=>!['ADMIN','CHIEF','AUTO_CHIEF'].includes(s.role));
   const byRole={};assignStaff.forEach(s=>{(byRole[s.role]=byRole[s.role]||[]).push(s);});
   const roleOrder=ROLES.map(r=>r[0]).filter(r=>byRole[r]);
@@ -1286,8 +1312,10 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();
       <div style="padding:2px 0 8px 16px">${byRole[r].sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name)).map(s=>`<label style="display:block;margin:3px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="wo_as" value="${s.id}" style="width:auto"> ${esc(s.shift)}·${esc(s.name)}</label>`).join('')}</div></details>`).join('');
   const kpi=woKPI();const kArr=Object.values(kpi).filter(t=>t.done>0).sort((a,b)=>b.score-a.score);
   const rows=list.map(w=>{const ph=(w.photos&&w.photos.length)?photoThumbs(w.photos):'';
+    const safe=w.safety?SAFE_LABELS.filter(([k])=>w.safety[k]).map(([k,l])=>'<span class="badge b-ok" style="font-size:10px;margin:1px">'+l+'</span>').join(''):'';
+    const files=(w.files&&w.files.length)?w.files.map(woFileLink).join(''):'';
     return `<tr><td class="t-accent" style="font-family:monospace;font-size:11px">${esc(w.no)}</td>
-      <td style="max-width:220px"><b>${esc(w.title)||'—'}</b>${w.desc?'<div class="muted" style="font-size:12px">'+esc(w.desc)+'</div>':''}${w.equip||w.pd?'<div class="muted" style="font-size:11px">'+esc(w.equip||'')+' '+esc(w.pd||'')+'</div>':''}${ph?'<div style="margin-top:3px">'+ph+'</div>':''}${w.completeNote?'<div style="font-size:11px" class="t-ok">✓ '+esc(w.completeNote)+'</div>':''}</td>
+      <td style="max-width:240px"><b>${esc(w.title)||'—'}</b>${w.desc?'<div class="muted" style="font-size:12px">'+esc(w.desc)+'</div>':''}${w.equip||w.pd?'<div class="muted" style="font-size:11px">'+esc(w.equip||'')+' '+esc(w.pd||'')+'</div>':''}${safe?'<div style="margin-top:3px">'+safe+'</div>':''}${ph?'<div style="margin-top:3px">'+ph+'</div>':''}${files?'<div style="margin-top:3px">'+files+'</div>':''}${w.rejectNote?'<div style="font-size:11px" class="t-danger">✖ Татгалзсан: '+esc(w.rejectNote)+'</div>':''}${w.completeNote?'<div style="font-size:11px" class="t-ok">✓ '+esc(w.completeNote)+'</div>':''}</td>
       <td style="font-size:12px">${(w.assignees||[]).map(staffName).map(esc).join(', ')||'—'}</td>
       <td style="font-size:11px" class="muted">${w.plannedFinish?'Товлосон: '+esc(w.plannedFinish.replace('T',' ')):'—'}</td>
       <td style="text-align:center;font-weight:700" class="t-teal">${woWorked(w)}<div style="font-size:10px;font-weight:400" class="muted">мин</div></td>
@@ -1308,6 +1336,8 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();
         <label class="field"><span>Байршил</span><select id="wo_area"><option value="">—</option>${optList(DB.areas)}</select></label>
         <label class="field"><span>Эхлэх (товлосон)</span><input type="datetime-local" id="wo_pstart"></label>
         <label class="field"><span>Дуусах (товлосон)</span><input type="datetime-local" id="wo_pfinish"></label>
+        <div class="field" style="grid-column:span 3"><span>🦺 Аюулгүй ажиллагаа (Safety)</span>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:4px">${SAFE_LABELS.map(([k,l])=>`<label style="font-size:12px;cursor:pointer"><input type="checkbox" id="saf_${k}" style="width:auto"> ${l}</label>`).join('')}</div></div>
         <div class="field" style="grid-column:span 3"><span>Гүйцэтгэх ажилтан — албан тушаал дээр дарж задлаад сонгоно (ахлах инженер хамаарахгүй)</span>
           <div style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 8px;margin-top:4px">${staffGroups||'<span class="muted">Ажилтан алга</span>'}</div></div>
       </div><div style="margin-top:10px">${dataListEquip()}${dataListPd()}<button class="btn">Наряд үүсгэх</button></div></form></div>`:''}
@@ -1358,7 +1388,7 @@ function startApp(){document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('who').textContent=ME.name;document.getElementById('whoRole').textContent=roleLabel(ME.role);
   renderNav();renderPresets();syncDates();render();
-  try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}}catch(e){}}
+  try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd'),wo=sp.get('wo');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}else if(wo){go('wo2');setTimeout(()=>{const w=woFind(+wo);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},300);}}catch(e){}}
 async function init(){if(!TOKEN)return;
   try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
   catch{localStorage.removeItem('tk');TOKEN=null;}}
