@@ -609,12 +609,20 @@ function setWoFaultState(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;
   }else if(val==='Засварлаж байгаа'){w.status='Хийгдэж буй';}
   else{w.status='Нээлттэй';}
   audit('Гэмтлийн төлөв өөрчлөв',(w.equip||w.pd||'')+' → '+val);save();toast('Гэмтлийн төлөв: '+val+(val==='Засварласан'?' · зогсолт '+(w.down||0)+' мин':''));refreshAfterWo();}
+function workCell(w){const tag=w.fault?'<span class="badge b-danger" style="font-size:10px;margin-left:4px">⚡гэмтэл</span>':'';
+  if(canEditWoStatus())return `<select onchange="setWoStatus2(${w.id},this.value)" style="padding:4px 6px;font-size:12px;width:auto">${STATUSES.map(s=>`<option ${s===(w.status||'Нээлттэй')?'selected':''}>${esc(s)}</option>`).join('')}</select>${tag}`;
+  return `<span class="badge ${badgeFor(w.status)}">${esc(w.status||'Нээлттэй')}</span>${tag}`;}
+function setWoStatus2(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.status=val;
+  if(w.fault){w.fstate=val==='Дууссан'?'Засварласан':(val==='Хийгдэж буй'?'Засварлаж байгаа':'Эвдрэлтэй');
+    if(val==='Дууссан'){if(!w.finish)w.finish=new Date().toISOString().slice(0,16);if(w.start&&w.finish)w.down=Math.max(0,Math.round((new Date(w.finish)-new Date(w.start))/60000));}}
+  audit('Ажлын статус',(w.equip||w.pd||w.no)+' → '+val);save();toast('Статус: '+val);refreshAfterWo();}
+function delWork(id){if(!canDelete()){toast('Зөвхөн админ устгана');return;}if(!confirm('Энэ ажлын бичлэгийг устгах уу?'))return;const w=DB.wos.find(x=>x.id===id);audit('Ажил устгав',w?w.no:String(id));DB.wos=DB.wos.filter(x=>x.id!==id);save();refreshAfterWo();}
 function renderWorkTable(){const rows=currentWorkRows();const hint=canEditWoStatus()?'':' <span style="font-weight:400;text-transform:none;color:var(--muted)">(зөвхөн Админ/Мастер засна)</span>';
-  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>TAG</th><th>PD</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус${hint}</th><th>Огноо</th></tr></thead>
+  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>TAG</th><th>PD</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус${hint}</th><th>Огноо</th>${canDelete()?'<th></th>':''}</tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td>
       <td>${esc(w.equip)||'—'}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(w.pd)||'—'}</td><td style="max-width:260px">${esc(w.desc)}</td><td class="muted">${esc(w.area)||'—'}</td>
-      <td>${esc(w.eng)||'—'}</td><td>${woStatusCell(w)}</td>
-      <td class="muted" style="font-size:12px">${w.date}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
+      <td>${esc(w.eng)||'—'}</td><td>${workCell(w)}</td>
+      <td class="muted" style="font-size:12px">${w.date}</td>${canDelete()?'<td>'+delBtn('delWork('+w.id+')')+'</td>':''}</tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
 function exportWork(){const rows=[['WO','TAG','PD','Тайлбар','Байршил','Төрөл','Priority','Инженер','Статус','Downtime(мин)','Огноо']];
   currentWorkRows().forEach(w=>rows.push([w.no,w.equip,w.pd||'',w.desc,w.area,w.type,w.prio,w.eng,w.status,downtimeOf(w),w.date]));
   downloadCSV('Ajliin-tuuh_'+RANGE.from+'_'+RANGE.to,rows);}
@@ -902,6 +910,11 @@ function showEqQR(tag){if(typeof qrcode==='undefined'){toast('QR сан алга
 function openPassport(tag){window._eqTag=tag;go('passport');}
 function prefillNew(tag){go('new');setTimeout(function(){const el=document.getElementById('w_equip');if(el)el.value=tag;},60);}
 function openInspectFor(tag){window._inspectEquip=tag;go('inspect');}
+function inspSearchUpdate(v){const q=(v||'').toLowerCase();const res=document.getElementById('insSearchRes');if(!res)return;
+  const list=q?(DB.equip||[]).filter(e=>(e.tag+' '+(e.name||'')).toLowerCase().includes(q)).slice(0,14):[];
+  res.innerHTML=list.map(e=>`<span class="badge b-accent" style="cursor:pointer;margin:3px;padding:6px 9px" onclick="inspectPick('${esc(e.tag)}')">✅ ${esc(e.tag)} · ${esc(e.name||'')}</span>`).join('')||(q?'<span class="muted" style="font-size:12px">Илэрц алга</span>':'');}
+function inspectPick(tag){const el=document.getElementById('ins_equip');if(el){el.value=tag;}const r=document.getElementById('insSearchRes');if(r)r.innerHTML='';const s=document.getElementById('insSearch');if(s)s.value='';
+  toast('Үзлэг: '+tag+' — доорх жагсаалтыг бөглөнө үү');const f=document.querySelector('.section-title');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
 function viewQR(){if(typeof qrcode==='undefined')return '<div class="note">QR сан ачаалагдаагүй — интернэт холболтоо шалгаад хуудсыг дахин ачаална уу (F5).</div>';
   const mode=window._qrMode||'equip';const q=(window._qrSearch||'').toLowerCase();let items;
   if(mode==='pd'){items=(DB.pdList||[]).filter(p=>!q||p.toLowerCase().includes(q)).map(p=>({tag:p,name:'PD дугаар',url:location.origin+'/?pd='+encodeURIComponent(p)}));}
@@ -909,11 +922,17 @@ function viewQR(){if(typeof qrcode==='undefined')return '<div class="note">QR с
   const shown=items.slice(0,300);
   return `<div class="glass card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <div class="seg"><button class="${mode==='equip'?'on':''}" onclick="window._qrMode='equip';render()">📦 Тоног QR</button><button class="${mode==='pd'?'on':''}" onclick="window._qrMode='pd';render()">🔌 PD QR</button></div>
-    <input id="qrs" value="${esc(window._qrSearch||'')}" placeholder="Хайх…" oninput="window._qrSearch=this.value;render()" style="max-width:240px">
-    <span class="muted" style="font-size:12px">${items.length} ширхэг${items.length>300?' (эхний 300 — хайлтаар нарийсга)':''}</span>
+    <input id="qrs" value="${esc(window._qrSearch||'')}" placeholder="Хайх…" oninput="qrSearchUpdate(this.value)" style="max-width:240px">
+    <span class="muted" style="font-size:12px" id="qrCount">${items.length} ширхэг${items.length>300?' (эхний 300 — хайлтаар нарийсга)':''}</span>
     <button class="btn btn-sm" style="margin-left:auto" onclick="window.print()">🖨 Хэвлэх / PDF хадгалах</button></div>
   <div class="note" style="margin-bottom:12px">QR кодууд доор шууд харагдана. "🖨 Хэвлэх" дарж наалт цаасан дээр хэвлэх эсвэл PDF болгож хадгална. Уншуулахад ${mode==='pd'?'тухайн PD дугаарын':'тухайн тоноглолын'} хуудас нээгдэнэ.</div>
   <div id="qrprint" class="glass card"><div class="qrgrid">${shown.map(it=>`<div class="qrcell"><img src="${qrDataUrl(it.url,4)}"><div class="t">${esc(it.tag)}</div><div class="n">${esc(it.name)}</div></div>`).join('')||'<div class="muted" style="padding:20px">Алга байна — тоног/PD нэмнэ үү.</div>'}</div></div>`;}
+function qrSearchUpdate(v){window._qrSearch=v;const mode=window._qrMode||'equip';const q=(v||'').toLowerCase();let items;
+  if(mode==='pd')items=(DB.pdList||[]).filter(p=>!q||p.toLowerCase().includes(q)).map(p=>({tag:p,name:'PD дугаар',url:location.origin+'/?pd='+encodeURIComponent(p)}));
+  else items=(DB.equip||[]).filter(e=>!q||(e.tag+' '+(e.name||'')).toLowerCase().includes(q)).map(e=>({tag:e.tag,name:e.name||'',url:qrUrl(e.tag)}));
+  const shown=items.slice(0,300);const g=document.querySelector('#qrprint .qrgrid');
+  if(g)g.innerHTML=shown.map(it=>`<div class="qrcell"><img src="${qrDataUrl(it.url,4)}"><div class="t">${esc(it.tag)}</div><div class="n">${esc(it.name)}</div></div>`).join('')||'<div class="muted" style="padding:20px">Алга байна.</div>';
+  const c=document.getElementById('qrCount');if(c)c.textContent=items.length+' ширхэг'+(items.length>300?' (эхний 300)':'');}
 function openPdPassport(pd){window._pdTag=pd;go('pdpass');}
 function prefillNewPd(pd){go('new');setTimeout(function(){const el=document.getElementById('w_pd');if(el)el.value=pd;},60);}
 function showPdQR(pd){if(typeof qrcode==='undefined'){toast('QR сан алга');return;}
@@ -1003,6 +1022,7 @@ function viewInspect(){if(!DB.inspections)DB.inspections=[];if(!DB.checkItems)DB
   const sel=window._inspectEquip||'';const items=DB.checkItems;
   const hist=DB.inspections.filter(i=>inRange(i.date)).sort((a,b)=>a.date<b.date?1:-1);
   return `${dataListEquip()}
+  <div class="glass card" style="margin-bottom:12px"><div style="display:flex;gap:8px;align-items:center">🔍 <input id="insSearch" placeholder="Тоног хайх — дарвал тухайн тоногийн үзлэг эхэлнэ" oninput="inspSearchUpdate(this.value)"></div><div id="insSearchRes" style="margin-top:8px"></div></div>
   <div class="glass card" style="margin-bottom:16px"><div class="section-title">✅ Үзлэг хийх <span class="badge b-accent" style="margin-left:auto">QR уншуулсан эсвэл TAG сонгох</span></div>
     <form onsubmit="saveInspection(event)"><div class="col3">
       <label class="field"><span>Огноо *</span><input type="date" id="ins_date" required value="${iso(new Date())}"></label>
@@ -1214,6 +1234,16 @@ function autofillRotation(){if(!canEditAttend())return;ensureStaff();
     let k;if(d<7)k=nightFirst?'night':'day';else k=nightFirst?'day':'night';upsertAtt(sid,ds,k,12,'');}
   for(let d=14;d<28;d++){const dt=new Date(base);dt.setDate(base.getDate()+d);upsertAtt(sid,iso(dt),'rosteroff',0,'');}
   save();toast('14/14 хуваарь (7 өдрөөр+7 шөнөөр+14 амралт) бөглөгдлөө ✓');render();}
+function bulkRotation(){if(!canEditAttend())return;ensureStaff();
+  const start=prompt('Эргэлтийн суурь огноо (YYYY-MM-DD) — энэ өдрөөс "А" ээлж өдрийн ажил эхэлнэ:',attMonth()+'-01');if(!start)return;
+  const base=new Date(start);if(isNaN(base)){toast('Огноо буруу');return;}
+  if(!confirm('Сонгосон сар ('+attMonth()+')-ийн БҮХ '+DB.staff.length+' ажилтны хуваарийг 14/14-өөр автоматаар цаг бүртгэлд бөглөх үү?\n(А→Б→В→Г ээлж 7 хоногоор шатлан эхэлнэ)'))return;
+  const off={'А':0,'Б':7,'В':14,'Г':21};const m=attMonth();const nd=monthDays(m);let cnt=0;
+  DB.staff.forEach(s=>{const o=off[s.shift]||0;
+    for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const diff=Math.round((new Date(ds)-base)/86400000);
+      let ph=(((diff-o)%28)+28)%28;let k=ph<7?'day':(ph<14?'night':'rosteroff');
+      upsertAtt(s.id,ds,k,k==='rosteroff'?0:12,'');cnt++;}});
+  save();toast('Бүх ажилтны хуваарь бөглөгдлөө ✓ ('+m+')');render();}
 // Excel-ийн дагуу зөв тооцоо: Үндсэн цаг = өдөрт min(цаг,8); Илүү цаг = max(цаг-8,0); Шөнийн цаг = ташуугийн ард (8/12)
 function attMonthSummary(m){const map={};(DB.staff||[]).forEach(s=>map[s.id]={base:0,ot:0,night:0,holiday:0,road:0,callout:0,office:0,leaveH:0,standby:0,sick:0,shiftl:0,off:0,other:0,worked:0,dayD:0,nightD:0});
   (DB.attendance||[]).filter(a=>a.date&&a.date.slice(0,7)===m).forEach(a=>{const t=map[a.staffId];if(!t)return;const k=attKey(a);if(!k)return;const h=+a.hours||0;
@@ -1258,7 +1288,8 @@ function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ 
       <button class="btn btn-sm btn-ghost" onclick="setAttMonth(1)">▶</button>
       <span class="muted" style="font-size:12px">Нүд дээр дарж төлөв/цаг сонгоно (НБҮГ-ийн тэмдэглэгээ · KPI-тай холбогдохгүй)</span>
       <div style="margin-left:auto;display:flex;gap:8px">
-        ${edit?'<button class="btn btn-sm" onclick="autofillRotation()">🔄 14/14 хуваарь</button>':''}
+        ${edit?'<button class="btn btn-sm btn-ghost" onclick="autofillRotation()">🔄 1 хүний 14/14</button>':''}
+        ${edit?'<button class="btn btn-sm" onclick="bulkRotation()">📋 Бүгдэд 14/14 төлөвлөх</button>':''}
         <button class="btn btn-sm btn-ghost" onclick="exportAttend()">📤 Excel татах</button></div></div>
     <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
       ${kpiCard('Өнөөдөр өдрөөр',tc(['day']),'ok')}${kpiCard('Өнөөдөр шөнөөр',tc(['night']),'accent')}
