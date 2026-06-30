@@ -586,10 +586,19 @@ function exportEnergy(){const ens=DB.energy.filter(e=>inRange(e.date)).sort((a,b
 
 /* ---- Ажлын түүх ---- */
 function badgeFor(s){return{'Дууссан':'b-ok','Нээлттэй':'b-accent','Хийгдэж буй':'b-warn','Цуцлагдсан':'b-muted'}[s]||'b-muted';}
-function viewWork(){return `<div class="glass card" style="margin-bottom:16px;display:flex;gap:10px;align-items:center">
+function viewWork(){const doneWO=(DB.naryad||[]).filter(WO_DONE).sort((a,b)=>((a.finishedAt||a.completedAt||'')<(b.finishedAt||b.completedAt||'')?1:-1));
+  return `<div class="glass card" style="margin-bottom:16px;display:flex;gap:10px;align-items:center">
     🔍 <input id="q" placeholder="Tag, төхөөрөмж, инженер, байршил, WO дугаараар хайх…" oninput="renderWorkTable()"></div>
   ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportWork()">📤 Excel татах</button>')}
-  <div class="glass card" style="padding:0;overflow:auto"><table id="wtable"></table></div>`;}
+  <div class="glass card" style="padding:0;overflow:auto;margin-bottom:16px"><div class="section-title" style="padding:12px 14px 0">📋 Ажил / гэмтлийн бүртгэл</div><table id="wtable"></table></div>
+  <div class="glass card" style="padding:0;overflow:auto"><div class="section-title" style="padding:12px 14px 0">🧾 Хаагдсан Work Order (Наряд) <span class="badge b-ok" style="margin-left:8px">${doneWO.length}</span></div>
+    <table><thead><tr><th>№</th><th>Ажил</th><th>Гүйцэтгэгч</th><th>Хугацаа</th><th>Дууссан</th><th>Төлөв</th><th></th></tr></thead>
+    <tbody>${doneWO.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:11px">${esc(w.no)}</td>
+      <td style="max-width:240px"><b>${esc(w.title)||'—'}</b>${w.completeNote?'<div class="t-ok" style="font-size:11px">✓ '+esc(w.completeNote)+'</div>':''}</td>
+      <td style="font-size:12px">${esc((w.assignees||[]).map(staffName).join(', '))||'—'}</td>
+      <td style="text-align:center">${woWorked(w)} мин</td><td class="muted" style="font-size:12px">${esc((w.finishedAt||w.completedAt||'').replace('T',' '))||'—'}</td>
+      <td><span class="badge ${wo2Badge[w.status]||'b-ok'}">${esc(wo2Label[w.status]||w.status)}</span></td>
+      <td><button class="btn btn-sm btn-ghost" onclick="openWoSheet(${w.id})">🖨️</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Хаагдсан наряд алга.</td></tr>'}</tbody></table></div>`;}
 function currentWorkRows(){const q=(document.getElementById('q')?.value||'').toLowerCase();
   let rows=DB.wos.filter(w=>inRange(w.date));
   if(q)rows=DB.wos.filter(w=>[w.no,w.equip,w.area,w.eng,w.desc].join(' ').toLowerCase().includes(q));
@@ -602,7 +611,9 @@ function woStatusCell(w){
   return `<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`;}
 function refreshAfterWo(){if(document.getElementById('wtable'))renderWorkTable();else render();}
 function setWoStatus(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.status=val;save();toast('Статус шинэчлэгдлээ ✓');refreshAfterWo();}
-function setWoFaultState(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.fstate=val;
+function setWoFaultState(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;
+  if(val==='Засварласан'&&!confirm('Энэ гэмтлийг ЗАСВАРЛАСАН гэж баталгаажуулах уу?\nИдэвхтэй гэмтлээс хасагдаж, Ажлын түүх рүү шилжинэ.')){refreshAfterWo();return;}
+  w.fstate=val;
   if(val==='Засварласан'){
     if(!w.finish)w.finish=new Date().toISOString().slice(0,16);            // цаг авто зогсоох
     if(w.start&&w.finish)w.down=Math.max(0,Math.round((new Date(w.finish)-new Date(w.start))/60000)); // зогсолт авто тооцох
@@ -613,7 +624,10 @@ function setWoFaultState(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;
 function workCell(w){const tag=w.fault?'<span class="badge b-danger" style="font-size:10px;margin-left:4px">⚡гэмтэл</span>':'';
   if(canEditWoStatus())return `<select onchange="setWoStatus2(${w.id},this.value)" style="padding:4px 6px;font-size:12px;width:auto">${STATUSES.map(s=>`<option ${s===(w.status||'Нээлттэй')?'selected':''}>${esc(s)}</option>`).join('')}</select>${tag}`;
   return `<span class="badge ${badgeFor(w.status)}">${esc(w.status||'Нээлттэй')}</span>${tag}`;}
-function setWoStatus2(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.status=val;
+function setWoStatus2(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;
+  if(val==='Дууссан'&&!confirm('Энэ ажлыг ДУУССАН гэж баталгаажуулах уу?')){refreshAfterWo();return;}
+  if(val==='Цуцлагдсан'&&!confirm('Энэ ажлыг ЦУЦЛАХ уу?')){refreshAfterWo();return;}
+  w.status=val;
   if(w.fault){w.fstate=val==='Дууссан'?'Засварласан':(val==='Хийгдэж буй'?'Засварлаж байгаа':'Эвдрэлтэй');
     if(val==='Дууссан'){if(!w.finish)w.finish=new Date().toISOString().slice(0,16);if(w.start&&w.finish)w.down=Math.max(0,Math.round((new Date(w.finish)-new Date(w.start))/60000));}}
   audit('Ажлын статус',(w.equip||w.pd||w.no)+' → '+val);save();toast('Статус: '+val);refreshAfterWo();}
@@ -805,9 +819,10 @@ function viewEng(){const m={};DB.wos.filter(w=>inRange(w.date)&&w.eng).forEach(w
     <tbody>${rows.map(([n,d])=>`<tr><td>${esc(n)}</td><td>${d.works}</td><td class="t-ok">${d.done}</td><td class="t-warn">${d.down}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:32px" class="muted">Өгөгдөл алга.</td></tr>'}</tbody></table></div>`;}
 
 /* ---- Гэмтэл ---- */
-function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1);
-  return `<div class="note" style="margin-bottom:16px">Гэмтлийг "Шинэ мэдээ оруулах" дээр <b>"Эвдрэл эсэх ☑"</b> тэмдэглэхэд бүртгэгдэнэ.
-    <button class="btn btn-sm" style="margin-left:10px" onclick="go('new')">➕ Гэмтэл бүртгэх</button></div>
+function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&isActiveFault(w)&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1);
+  const fixed=DB.wos.filter(w=>w.fault&&!isActiveFault(w)&&inRange(w.date)).length;
+  return `<div class="note" style="margin-bottom:16px">Зөвхөн <b>идэвхтэй (засагдаагүй)</b> гэмтэл харагдана. Засварласан гэмтэл <b>Ажлын түүх</b> рүү шилжинэ${fixed?' ('+fixed+' засварласан)':''}.
+    <button class="btn btn-sm" style="margin-left:10px" onclick="go('new')">➕ Гэмтэл бүртгэх</button> <button class="btn btn-sm btn-ghost" onclick="go('work')">📋 Ажлын түүх</button></div>
   ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportFaults()">📤 Excel татах</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>📷</th><th>Priority</th><th>Root Cause</th><th>Downtime</th><th>Гэмтлийн төлөв</th></tr></thead>
@@ -1677,6 +1692,10 @@ function renderSearch(q){const el=document.getElementById('gsRes');if(!el)return
   }
   el.innerHTML=out.slice(0,30).map(r=>`<div onclick="${r.go}" style="padding:8px 10px;border-radius:8px;cursor:pointer" onmouseover="this.style.background='rgba(128,128,128,.12)'" onmouseout="this.style.background='none'"><span class="badge b-muted" style="font-size:10px;margin-right:6px">${r.t}</span>${esc(r.l)}</div>`).join('')||'<div class="muted" style="padding:10px">Илэрц алга</div>';}
 /* ---- Тайлан төв (Sprint 10) ---- */
+function attRangeSummary(from,to){const map={};(DB.staff||[]).forEach(s=>map[s.id]={name:s.name,role:s.role,shift:s.shift,ot:0,callout:0,night:0});
+  (DB.attendance||[]).filter(a=>a.date>=from&&a.date<=to).forEach(a=>{const t=map[a.staffId];if(!t)return;const k=attKey(a);const h=+a.hours||0;
+    if(k==='ot')t.ot+=h;else if(k==='callout')t.callout+=h;else if(k==='night')t.night+=Math.min(h,nightPortionForDate(a.date));});
+  return map;}
 function viewReport2(){const k=kpis();const nar=DB.naryad||[];const open=nar.filter(w=>!WO_DONE(w)&&w.status!=='Cancelled').length,closed=nar.filter(WO_DONE).length;
   const m=attMonth();const att=attMonthSummary(m);const attTot=Object.values(att).reduce((s,t)=>s+(t.worked||0),0);
   const ens=DB.energy.filter(e=>inRange(e.date));const tf=ens.reduce((s,e)=>s+(+e.feed||0),0),te=ens.reduce((s,e)=>s+(+e.energy||0),0);
@@ -1696,7 +1715,12 @@ function viewReport2(){const k=kpis();const nar=DB.naryad||[];const open=nar.fil
     <h3>Идэвхтэй гэмтэл</h3>
     <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:13px"><tr><th>Tag/PD</th><th>Тайлбар</th><th>Огноо</th><th>Төлөв</th></tr>
       ${(DB.wos||[]).filter(isActiveFault).map(w=>`<tr><td>${esc(w.equip||w.pd)}</td><td>${esc(w.desc)}</td><td>${w.date}</td><td>${esc(faultState(w))}</td></tr>`).join('')||'<tr><td colspan="4">Идэвхтэй гэмтэл алга</td></tr>'}
-    </table></div>`;
+    </table>
+    <h3>Илүү цаг (сунаж) ба Дуудлагын ажлын нэгтгэл — ${RANGE.from} – ${RANGE.to}</h3>
+    <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:13px"><tr><th>Ажилтан</th><th>Ээлж</th><th>Илүү цаг (сунаж)</th><th>Дуудлагын цаг</th><th>Шөнийн цаг</th></tr>
+      ${(()=>{const m=attRangeSummary(RANGE.from,RANGE.to);const arr=Object.values(m).filter(t=>t.ot||t.callout).sort((a,b)=>(b.ot+b.callout)-(a.ot+a.callout));return arr.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(t.shift)}</td><td>${t.ot}</td><td>${t.callout}</td><td>${t.night}</td></tr>`).join('')||'<tr><td colspan="5">Илүү цаг / дуудлага алга</td></tr>';})()}
+    </table>
+    <div style="font-size:11px;color:#777;margin-top:6px">Хугацааг дээрх огнооны шүүлтүүрээр (сар / улирал / жил) тохируулна.</div></div>`;
   return `<div class="glass card" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div class="section-title" style="margin:0">📑 Тайлан төв</div>
       <span class="muted" style="font-size:12px">Хугацааг дээрх огнооны шүүлтүүрээр сонгоно</span>
