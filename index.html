@@ -544,6 +544,9 @@ function viewEnergy(){const ens=DB.energy.filter(e=>inRange(e.date)).sort((a,b)=
     ${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}${kpiCard('Нийт авсан тэжээл',num(k.totFeed),'teal','мян/тн')}
     ${kpiCard('Нийт эрчим хүч',num(k.totEn),'warn','кВт/цаг')}${kpiCard('Бүртгэлийн тоо',ens.length,'ok')}</div>
   <div class="glass card" style="margin-bottom:16px"><div class="section-title">🔋 Нэгж бүтээгдэхүүнд зарцуулсан эрчим хүч (кВт/цаг)</div><canvas id="cE2" height="80"></canvas></div>
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title" style="display:flex;align-items:center">📈 Эрчим хүчний хэрэглээ — хугацаагаар
+    <div class="seg" style="margin-left:auto">${[['day','Өдөр'],['month','Сар'],['year','Жил']].map(([p,l])=>`<button class="${(window._engPeriod||'month')===p?'on':''}" onclick="setEngPeriod('${p}')">${l}</button>`).join('')}</div></div>
+    <canvas id="cE3" height="90"></canvas></div>
   <div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Эрчим хүчний хэрэглээ бүртгэх</div>
     <form onsubmit="addEnergy(event)"><div class="col3">
       <label class="field"><span>Огноо *</span><input type="date" id="en_date" required value="${iso(new Date())}"></label>
@@ -560,7 +563,17 @@ function viewEnergy(){const ens=DB.energy.filter(e=>inRange(e.date)).sort((a,b)=
     <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
 function drawEnergyChart(){const et=energyTrend();if(window._eC)window._eC.destroy();
   window._eC=new Chart(cE2,{type:'line',data:{labels:et.map(x=>x.date),
-    datasets:[{label:'кВт/цаг (нэгж бүт.)',data:et.map(x=>x.unit),borderColor:'#1ec8c8',backgroundColor:'rgba(30,200,200,.15)',fill:true,tension:.3}]},options:baseOpts()});}
+    datasets:[{label:'кВт/цаг (нэгж бүт.)',data:et.map(x=>x.unit),borderColor:'#1ec8c8',backgroundColor:'rgba(30,200,200,.15)',fill:true,tension:.3}]},options:baseOpts()});drawEnergyAgg();}
+function setEngPeriod(p){window._engPeriod=p;render();}
+function energyAgg(){const p=window._engPeriod||'month';const m={};
+  (DB.energy||[]).forEach(e=>{let key=e.date;if(p==='month')key=e.date.slice(0,7);else if(p==='year')key=e.date.slice(0,4);
+    if(!m[key])m[key]={energy:0,feed:0};m[key].energy+=+e.energy||0;m[key].feed+=+e.feed||0;});
+  return Object.keys(m).sort().map(k=>({k,energy:m[k].energy,feed:m[k].feed,unit:m[k].feed>0?+(m[k].energy/m[k].feed).toFixed(2):0}));}
+function drawEnergyAgg(){const a=energyAgg();if(window._eC3)window._eC3.destroy();const pe=document.getElementById('cE3');if(!pe)return;
+  window._eC3=new Chart(pe,{data:{labels:a.map(x=>x.k),datasets:[
+    {type:'bar',label:'Эрчим хүч (кВт/цаг)',data:a.map(x=>x.energy),backgroundColor:'#2e8bff',yAxisID:'y'},
+    {type:'line',label:'Нэгж бүт.',data:a.map(x=>x.unit),borderColor:'#1ec8c8',tension:.3,yAxisID:'y1'}]},
+    options:baseOpts({scales:{x:{ticks:{color:'#8ea2c0'},grid:{color:'#243049'}},y:{ticks:{color:'#8ea2c0'},grid:{color:'#243049'}},y1:{position:'right',ticks:{color:'#1ec8c8'},grid:{display:false}}}})});}
 function calcUnit(){const f=+val('en_feed'),e=+val('en_energy');document.getElementById('en_unit').value=f>0?unitEnergy(e,f):'';}
 function addEnergy(ev){ev.preventDefault();DB.energy.push({id:++DB.seq.energy,date:val('en_date'),shift:val('en_shift'),feed:+val('en_feed'),energy:+val('en_energy'),tezu:val('en_tezu')});
   save();toast('Эрчим хүчний бүртгэл нэмэгдлээ ✓');render();}
@@ -679,7 +692,11 @@ function viewEquip(){
       <label class="field"><span>Ангилал</span><input id="e_cat" placeholder="MG / GT / CV ..."></label>
       <label class="field"><span>Байршил</span><select id="e_area"><option value="">—</option>${optList(DB.areas)}</select></label>
       <label class="field"><span>Эгзэгтэй байдал</span><select id="e_crit">${optList(['Бага','Дунд','Өндөр','Эгзэгтэй'],'Дунд')}</select></label>
-      <div style="grid-column:span 3;display:flex;align-items:end"><button class="btn">Нэмэх</button></div></div></form></div>
+      <label class="field"><span>Үйлдвэрлэгч</span><input id="e_maker" placeholder="ж: Siemens / ABB"></label>
+      <label class="field"><span>Модель</span><input id="e_model" placeholder="модель"></label>
+      <label class="field"><span>Сериал №</span><input id="e_serial" placeholder="serial number"></label>
+      <label class="field"><span>Баталгаат хугацаа дуусах</span><input type="date" id="e_warranty"></label>
+      <div style="grid-column:span 2;display:flex;align-items:end"><button class="btn">Нэмэх</button></div></div></form></div>
   <div class="glass card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center">
     🔍 <input id="eq" value="${esc(window._eq||'')}" placeholder="TAG, нэр, PD-аар хайх…" oninput="refreshEq(this.value)">
     <button class="btn btn-sm btn-ghost" onclick="go('qr')">🔲 QR кодууд</button>
@@ -687,12 +704,12 @@ function viewEquip(){
   <div id="eqResults">${eqResultsHTML()}</div>`;}
 function addEquip(e){e.preventDefault();const tag=val('e_tag').trim();
   if(DB.equip.some(x=>x.tag===tag)){toast('Энэ TAG бүртгэлтэй');return;}
-  DB.equip.push({tag,name:val('e_name').trim(),pd:val('e_pd').trim(),cat:val('e_cat').trim(),area:val('e_area'),crit:val('e_crit')});save();
+  DB.equip.push({tag,name:val('e_name').trim(),pd:val('e_pd').trim(),cat:val('e_cat').trim(),area:val('e_area'),crit:val('e_crit'),maker:val('e_maker').trim(),model:val('e_model').trim(),serial:val('e_serial').trim(),warranty:val('e_warranty')});save();audit('Тоног нэмэв',tag);
   toast('Нэмэгдлээ ✓ — QR автоматаар үүслээ');
   if(confirm(tag+' нэмэгдлээ. QR кодыг нь одоо харах уу? (хэвлэхэд бэлэн)'))showEqQR(tag);else render();}
 function delEquip(tag){if(!confirm(tag+' -ийг устгах уу?'))return;DB.equip=DB.equip.filter(e=>e.tag!==tag);save();render();}
-function exportEquip(){const rows=[['TAG','Нэр','PD','Байршил','Ангилал','Эгзэгтэй байдал']];
-  DB.equip.forEach(e=>rows.push([e.tag,e.name,e.pd||'',e.area,e.cat,e.crit]));downloadCSV('Tonog-tohooromj',rows);}
+function exportEquip(){const rows=[['TAG','Нэр','PD','Байршил','Ангилал','Эгзэгтэй байдал','Үйлдвэрлэгч','Модель','Сериал','Баталгаа дуусах']];
+  DB.equip.forEach(e=>rows.push([e.tag,e.name,e.pd||'',e.area,e.cat,e.crit,e.maker||'',e.model||'',e.serial||'',e.warranty||'']));downloadCSV('Tonog-tohooromj',rows);}
 
 /* ---- Найдвартай ажиллагаа ---- */
 function viewReliab(){const r=equipReliability();
@@ -965,6 +982,7 @@ function viewPassport(){const tag=window._eqTag;const e=DB.equip.find(x=>x.tag==
       ${e.crit?`<span class="badge ${tb}">${esc(e.crit)}</span>`:''}<span class="muted">${esc(e.name||'')}</span>
       <button class="btn btn-sm" style="margin-left:auto" onclick="showEqQR('${esc(tag)}')">🔲 QR хэвлэх</button></div>
     <div class="muted" style="margin-top:6px">PD: ${esc(e.pd)||'—'} · Байршил: ${esc(e.area)||'—'} · Ангилал: ${esc(e.cat)||'—'}</div>
+    ${(e.maker||e.model||e.serial||e.warranty)?`<div class="muted" style="margin-top:3px;font-size:12px">🏭 ${esc(e.maker)||'—'} · Модель: ${esc(e.model)||'—'} · Сериал: ${esc(e.serial)||'—'} · Баталгаа: ${esc(e.warranty)||'—'}${(e.warranty&&new Date(e.warranty)<new Date())?' <span class="badge b-danger" style="font-size:10px">дууссан</span>':''}</div>`:''}
     <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:14px">
       ${kpiCard('Нийт ажил',works.length,'accent')}${kpiCard('Гэмтэл',faults.length,'danger')}
       ${kpiCard('Идэвхтэй гэмтэл',works.filter(isActiveFault).length,'warn')}${kpiCard('Үзлэг',insp.length,'ok')}</div>
@@ -1369,8 +1387,8 @@ function viewWoSheet(){const w=woFind(window._woSheetId);if(!w)return '<div clas
       </table>
       <div style="display:flex;justify-content:space-between;margin-top:44px;gap:24px;text-align:center;font-size:12px">
         <div style="flex:1"><div style="border-top:1px solid #555;padding-top:5px">Гүйцэтгэсэн (ажилтан)</div><div style="margin-top:4px">${esc(who[0]||'')}</div></div>
-        <div style="flex:1"><div style="border-top:1px solid #555;padding-top:5px">Хүлээлгэн өгсөн / Мастер</div></div>
-        <div style="flex:1"><div style="border-top:1px solid #555;padding-top:5px">Баталгаажуулсан / Ахлах инженер</div><div style="margin-top:4px">${esc((w.status==='Completed'||w.status==='Closed')?'✔ батлагдсан':'')}</div></div>
+        <div style="flex:1"><div style="border-top:1px solid #555;padding-top:5px">Наряд өгсөн / Мастер</div></div>
+        <div style="flex:1"><div style="border-top:1px solid #555;padding-top:5px">Хянасан / Ахлах инженер</div><div style="margin-top:4px">${esc((w.status==='Completed'||w.status==='Closed')?'✔ хянасан':'')}</div></div>
       </div>
       <div style="text-align:right;margin-top:18px;font-size:11px;color:#777">Хэвлэсэн: ${esc(ME?ME.name:'')} · ${iso(new Date())}</div>
     </div>`;}
