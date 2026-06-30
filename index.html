@@ -15,6 +15,12 @@
 <style>
   :root{--base:#0b1020;--panel:#121a2e;--panel2:#172139;--line:#243049;
     --accent:#2e8bff;--teal:#1ec8c8;--ok:#2fd07a;--warn:#ffb020;--danger:#ff4d4f;--muted:#8ea2c0;--text:#e6edf7;}
+  body.light{--base:#f4f6fb;--panel:#ffffff;--panel2:#eef2f9;--line:#d5dee9;--muted:#566683;--text:#16203a;}
+  body.light .glass{background:linear-gradient(180deg,#ffffff,#f6f9fc)}
+  body.light aside{background:#eef2f9}
+  body.light header{background:rgba(255,255,255,.92)}
+  body.light nav a:hover{background:rgba(0,0,0,.05);color:#111}
+  body.light .tot{background:rgba(0,0,0,.04)}
   *{box-sizing:border-box}
   body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;color:var(--text);
     background:radial-gradient(1200px 600px at 80% -10%,rgba(46,139,255,.08),transparent),
@@ -120,6 +126,8 @@
       <button class="menu-btn" onclick="document.getElementById('side').classList.toggle('open')">☰</button>
       <span class="dot"></span><h1 id="title">Нүүр</h1>
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-sm btn-ghost" onclick="openSearch()" title="Хайлт (Ctrl+K)">🔍 Хайх</button>
+        <button class="btn btn-sm btn-ghost" id="themeBtn" onclick="toggleTheme()" title="Theme">🌙</button>
         <div class="seg" id="presets"></div>
         <input type="date" id="dFrom" style="width:auto" onchange="setCustom()"><span class="muted">—</span>
         <input type="date" id="dTo" style="width:auto" onchange="setCustom()">
@@ -327,7 +335,7 @@ const BASE_PAGES=[
   ['energy','Эрчим хүчний хэрэглээ','🔋'],['work','Ажлын түүх / Хайлт','📋'],
   ['loto','Тусгаарлалт / LOTO','🔒'],['equip','Тоног төхөөрөмж','📦'],
   ['reliab','Найдвартай ажиллагаа','📈'],['report','Тайлан / Дүгнэлт','📅'],
-  ['eng','Инженерийн гүйцэтгэл','👤'],['faults','Цахилгааны гэмтэл','⚡'],
+  ['eng','Инженерийн гүйцэтгэл','👤'],['rptcenter','Тайлан төв','📑'],['faults','Цахилгааны гэмтэл','⚡'],
   ['wo2','Наряд / Work Order','🧾'],
   ['parts','Сэлбэгийн нөөц','🔩'],['inspect','Үзлэг (QR)','✅'],['qr','QR кодууд','🔲'],
   ['hr','Хүний нөөц / Ээлж','🧑‍🔧'],['ref','Лавлах / Тохиргоо','⚙️'],
@@ -368,6 +376,7 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='perms')v.innerHTML=viewPerms();
   else if(CUR==='audit')v.innerHTML=viewAudit();
   else if(CUR==='notifs'){v.innerHTML=viewNotifs();markNotifsRead();}
+  else if(CUR==='rptcenter')v.innerHTML=viewReport2();
   else if(CUR==='loto'){v.innerHTML=viewLoto();drawLotoCharts();}
 }
 function kpiCard(lbl,val,tone,sub){return `<div class="glass card kpi"><div class="lbl">${lbl}</div>
@@ -517,7 +526,7 @@ function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
       desc,fault:isFault,fstate:isFault?'Эвдрэлтэй':'',root:val('w_root'),action:val('w_action'),
       start:(s||(isFault?new Date().toISOString().slice(0,16):'')),finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng'),photos:(window._newPhotos||[]).slice()});
     if(isFault){
-      notify('⚡ ГЭМТЭЛ бүртгэгдлээ ('+(prio||'—')+')\nТоног: '+(equip||'—')+'\nТайлбар: '+desc+'\nОгноо: '+val('f_date')+' ('+val('f_shift')+' ээлж) · '+(ME?ME.name:''));}
+      notify('⚡ ГЭМТЭЛ бүртгэгдлээ ('+(prio||'—')+')\nТоног: '+(equip||'—')+'\nТайлбар: '+desc+'\nОгноо: '+val('f_date')+' ('+val('f_shift')+' ээлж) · '+(ME?ME.name:''));pushNotif('*','⚡ Гэмтэл: '+(equip||'—')+' — '+desc);notifyBrowser('⚡ Гэмтэл бүртгэгдлээ',(equip||'')+' '+desc);}
   }
   window._newPhotos=[];save();toast('Хадгалагдлаа ✓ ('+no+')');go('dash');}
 
@@ -934,7 +943,7 @@ async function saveQuickCheck(e,target,kind){e.preventDefault();
       root:'',action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()});
     window._newPhotos=[];await saveNow();
     notify('⚡ ГЭМТЭЛ илэрлээ (QR шуурхай үзлэг)\n'+(kind==='pd'?'PD: ':'Тоног: ')+target+'\nТайлбар: '+(fdesc||note||'—')+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
-    audit('QR гэмтэл бүртгэв',(kind==='pd'?'PD ':'')+target);
+    audit('QR гэмтэл бүртгэв',(kind==='pd'?'PD ':'')+target);pushNotif('*','⚡ Гэмтэл илэрлээ: '+(kind==='pd'?'PD ':'')+target);notifyBrowser('⚡ Гэмтэл илэрлээ',target);
     toast('Гэмтэл бүртгэгдлээ ✓ — "Цахилгааны гэмтэл" болон даш дээр харагдана');go('faults');return;}
   await saveNow();toast('Үзлэг хадгалагдлаа ✓ ('+(normal==='✅'?'Хэвийн':'Анхаарах')+')');render();}
 function compressImg(file,cb){const r=new FileReader();r.onload=ev=>{const img=new Image();img.onload=()=>{const max=900;let w=img.width,h=img.height;
@@ -1405,7 +1414,8 @@ function exportAudit(){const rows=[['Огноо/цаг','Хэрэглэгч','А
 /* ---- Мэдэгдэл ---- */
 function markNotifsRead(){if(!ME||!DB.notifs)return;let ch=false;DB.notifs.forEach(n=>{if((n.toName===ME.name||n.toName==='*')&&!n.read){n.read=true;ch=true;}});if(ch){save();renderNav();}}
 function viewNotifs(){const mine=(DB.notifs||[]).filter(n=>n.toName===ME.name||n.toName==='*').slice().reverse().slice(0,200);
-  return `<div class="glass card" style="margin-bottom:14px"><div class="section-title">🔔 Миний мэдэгдэл <span class="badge b-accent" style="margin-left:auto">${mine.length}</span></div></div>
+  return `<div class="glass card" style="margin-bottom:14px;display:flex;align-items:center;gap:10px"><div class="section-title" style="margin:0">🔔 Миний мэдэгдэл <span class="badge b-accent" style="margin-left:8px">${mine.length}</span></div>
+      <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="enableBrowserNotif()">🔔 Browser мэдэгдэл асаах</button></div>
     <div class="glass card" style="padding:0;overflow:auto"><table>
       <thead><tr><th>Огноо/цаг</th><th>Мэдэгдэл</th></tr></thead>
       <tbody>${mine.map(n=>`<tr><td style="white-space:nowrap;font-size:12px" class="muted">${esc(n.ts)}</td><td>${esc(n.text)}</td></tr>`).join('')||'<tr><td colspan="2" class="muted" style="text-align:center;padding:24px">Мэдэгдэл алга.</td></tr>'}</tbody></table></div>`;}
@@ -1488,6 +1498,65 @@ function drawLotoCharts(){lotoCharts.forEach(c=>c.destroy());lotoCharts=[];if(!D
   const pe=document.getElementById('loPie'),ba=document.getElementById('loBar');if(!pe||!ba)return;
   lotoCharts.push(new Chart(pe,{type:'doughnut',data:{labels:['Стандарт','Групп'],datasets:[{data:[std,grp],backgroundColor:['#1ec8c8','#ffb020']}]},options:{responsive:true,plugins:{legend:{labels:{color:'#8ea2c0'}}}}}));
   lotoCharts.push(new Chart(ba,{type:'bar',data:{labels:LOTO_STATES.map(s=>lotoLabel[s]),datasets:[{label:'Тоо',data:sc,backgroundColor:'#2e8bff'}]},options:baseOpts({plugins:{legend:{display:false}}})}));}
+/* ---- Theme (гэрэл/харанхуй) ---- */
+function applyTheme(){if(localStorage.getItem('theme')==='light')document.body.classList.add('light');else document.body.classList.remove('light');const b=document.getElementById('themeBtn');if(b)b.textContent=document.body.classList.contains('light')?'☀️':'🌙';}
+function toggleTheme(){const light=!document.body.classList.contains('light');localStorage.setItem('theme',light?'light':'dark');applyTheme();}
+/* ---- Browser мэдэгдэл (Sprint 9) ---- */
+function notifyBrowser(title,body){try{if(!('Notification'in window))return;if(Notification.permission==='granted')new Notification(title,{body:body||''});}catch(e){}}
+function enableBrowserNotif(){if(!('Notification'in window)){toast('Энэ browser дэмжихгүй');return;}Notification.requestPermission().then(p=>{if(p==='granted'){localStorage.setItem('bnotif','1');toast('Browser мэдэгдэл асаалаа ✓');notifyBrowser('✓ Мэдэгдэл идэвхжлээ','Танд шинэ зүйл болоход энд мэдэгдэнэ');}else toast('Зөвшөөрөл өгөгдсөнгүй');});}
+let _notifTimer=null,_lastUnread=0;
+function startNotifPoll(){if(_notifTimer)clearInterval(_notifTimer);_lastUnread=myUnread();
+  _notifTimer=setInterval(async()=>{try{const fresh=await api('/api/data',{headers:authHdr()});DB=fresh;const u=myUnread();renderNav();
+    if(u>_lastUnread){const n=(DB.notifs||[]).filter(x=>x.toName===ME.name||x.toName==='*').slice(-1)[0];notifyBrowser('🔔 Шинэ мэдэгдэл',n?n.text:'Танд шинэ мэдэгдэл байна');}
+    _lastUnread=u;}catch(e){}},45000);}
+/* ---- Global search / Command palette (Sprint 11) ---- */
+function openSearch(){if(document.getElementById('gsModal'))return;const o=document.createElement('div');o.id='gsModal';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:400;display:grid;place-items:start center;padding:60px 16px';o.onclick=e=>{if(e.target===o)o.remove();};
+  o.innerHTML=`<div class="glass card" style="max-width:560px;width:100%"><input id="gsInput" placeholder="Хайх: тоног, PD, наряд, гэмтэл, цэс..." oninput="renderSearch(this.value)" style="font-size:16px"><div id="gsRes" style="margin-top:10px;max-height:55vh;overflow:auto"></div></div>`;
+  document.body.appendChild(o);setTimeout(()=>{const i=document.getElementById('gsInput');if(i)i.focus();},50);renderSearch('');}
+function closeSearch(){const m=document.getElementById('gsModal');if(m)m.remove();}
+function renderSearch(q){const el=document.getElementById('gsRes');if(!el)return;q=(q||'').trim().toLowerCase();const out=[];
+  pages().forEach(([k,l,ic])=>{if(!q||l.toLowerCase().includes(q))out.push({t:'Цэс',l:ic+' '+l,go:"go('"+k+"');closeSearch()"});});
+  if(q){
+    (DB.equip||[]).filter(e=>(e.tag+' '+(e.name||'')).toLowerCase().includes(q)).slice(0,8).forEach(e=>out.push({t:'Тоног',l:e.tag+' · '+(e.name||''),go:"openPassport('"+esc(e.tag)+"');closeSearch()"}));
+    (DB.pdList||[]).filter(p=>String(p).toLowerCase().includes(q)).slice(0,6).forEach(p=>out.push({t:'PD',l:p,go:"openPdPassport('"+esc(p)+"');closeSearch()"}));
+    (DB.naryad||[]).filter(w=>((w.no||'')+' '+(w.title||'')).toLowerCase().includes(q)).slice(0,6).forEach(w=>out.push({t:'Наряд',l:(w.no||'')+' · '+(w.title||''),go:"go('wo2');closeSearch()"}));
+    (DB.wos||[]).filter(w=>w.fault&&((w.equip||'')+' '+(w.desc||'')).toLowerCase().includes(q)).slice(0,6).forEach(w=>out.push({t:'Гэмтэл',l:(w.equip||w.pd||'')+' · '+(w.desc||''),go:"go('faults');closeSearch()"}));
+  }
+  el.innerHTML=out.slice(0,30).map(r=>`<div onclick="${r.go}" style="padding:8px 10px;border-radius:8px;cursor:pointer" onmouseover="this.style.background='rgba(128,128,128,.12)'" onmouseout="this.style.background='none'"><span class="badge b-muted" style="font-size:10px;margin-right:6px">${r.t}</span>${esc(r.l)}</div>`).join('')||'<div class="muted" style="padding:10px">Илэрц алга</div>';}
+/* ---- Тайлан төв (Sprint 10) ---- */
+function viewReport2(){const k=kpis();const nar=DB.naryad||[];const open=nar.filter(w=>!WO_DONE(w)&&w.status!=='Cancelled').length,closed=nar.filter(WO_DONE).length;
+  const m=attMonth();const att=attMonthSummary(m);const attTot=Object.values(att).reduce((s,t)=>s+(t.worked||0),0);
+  const ens=DB.energy.filter(e=>inRange(e.date));const tf=ens.reduce((s,e)=>s+(+e.feed||0),0),te=ens.reduce((s,e)=>s+(+e.energy||0),0);
+  const rep=`<div id="rptArea">
+    <h2 style="margin:0 0 4px">Цахилгаан автоматжуулалтын нэгж — Тайлан</h2>
+    <div class="muted" style="font-size:12px">Хугацаа: ${RANGE.from} – ${RANGE.to} · Үүсгэсэн: ${esc(ME?ME.name:'')} · ${iso(new Date())}</div>
+    <h3>Үндсэн үзүүлэлт</h3>
+    <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:13px">
+      <tr><td>Нийт ажил</td><td><b>${k.total}</b></td><td>Хийгдсэн</td><td><b>${k.done}</b></td></tr>
+      <tr><td>Гэмтэл (идэвхтэй)</td><td><b>${k.activeFaults}</b> / нийт ${k.faults}</td><td>Шуурхай дуудлага</td><td>${k.emergency}</td></tr>
+      <tr><td>MTBF (цаг)</td><td>${k.mtbf}</td><td>MTTR (мин)</td><td>${k.mttr}</td></tr>
+      <tr><td>Downtime (мин)</td><td>${k.down}</td><td>Availability</td><td>${k.avail}%</td></tr>
+      <tr><td>Эрчим хүч (кВт/цаг)</td><td>${num(te)}</td><td>Тэжээл (мян/тн)</td><td>${num(tf)}</td></tr>
+      <tr><td>Work Order — нээлттэй</td><td>${open}</td><td>Дууссан</td><td>${closed}</td></tr>
+      <tr><td>Тусгаарлалт / LOTO</td><td>${(DB.loto||[]).length}</td><td>Цаг бүртгэл (${m}) нийт цаг</td><td>${attTot}</td></tr>
+    </table>
+    <h3>Идэвхтэй гэмтэл</h3>
+    <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:13px"><tr><th>Tag/PD</th><th>Тайлбар</th><th>Огноо</th><th>Төлөв</th></tr>
+      ${(DB.wos||[]).filter(isActiveFault).map(w=>`<tr><td>${esc(w.equip||w.pd)}</td><td>${esc(w.desc)}</td><td>${w.date}</td><td>${esc(faultState(w))}</td></tr>`).join('')||'<tr><td colspan="4">Идэвхтэй гэмтэл алга</td></tr>'}
+    </table></div>`;
+  return `<div class="glass card" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div class="section-title" style="margin:0">📑 Тайлан төв</div>
+      <span class="muted" style="font-size:12px">Хугацааг дээрх огнооны шүүлтүүрээр сонгоно</span>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="window.print()">🖨️ PDF (хэвлэх)</button>
+        <button class="btn btn-sm btn-ghost" onclick="reportWord()">📝 Word</button>
+        <button class="btn btn-sm btn-ghost" onclick="reportExcel()">📊 Excel</button></div></div>
+    <div class="glass card" style="padding:18px">${rep}</div>`;}
+function reportWord(){const a=document.getElementById('rptArea');if(!a)return;const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>'+a.innerHTML+'</body></html>';
+  const blob=new Blob(['﻿'+html],{type:'application/msword'});const url=URL.createObjectURL(blob);const el=document.createElement('a');el.href=url;el.download='Tailan_'+RANGE.from+'_'+RANGE.to+'.doc';el.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function reportExcel(){const k=kpis();const nar=DB.naryad||[];const ens=DB.energy.filter(e=>inRange(e.date));const te=ens.reduce((s,e)=>s+(+e.energy||0),0),tf=ens.reduce((s,e)=>s+(+e.feed||0),0);
+  const rows=[['Үзүүлэлт','Утга'],['Хугацаа',RANGE.from+' - '+RANGE.to],['Нийт ажил',k.total],['Хийгдсэн',k.done],['Идэвхтэй гэмтэл',k.activeFaults],['Нийт гэмтэл',k.faults],['Шуурхай дуудлага',k.emergency],['MTBF цаг',k.mtbf],['MTTR мин',k.mttr],['Downtime мин',k.down],['Availability %',k.avail],['Эрчим хүч кВт/цаг',te],['Тэжээл мян/тн',tf],['WO нээлттэй',nar.filter(w=>!WO_DONE(w)&&w.status!=='Cancelled').length],['WO дууссан',nar.filter(WO_DONE).length],['Тусгаарлалт/LOTO',(DB.loto||[]).length]];
+  downloadCSV('Tailan_'+RANGE.from+'_'+RANGE.to,rows);}
 function toast(msg){const t=document.createElement('div');t.className='glass toast';t.textContent=msg;
   document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
 
@@ -1502,11 +1571,14 @@ function logout(){localStorage.removeItem('tk');TOKEN=null;ME=null;location.relo
 function startApp(){document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('who').textContent=ME.name;document.getElementById('whoRole').textContent=roleLabel(ME.role);
+  applyTheme();startNotifPoll();
   renderNav();renderPresets();syncDates();render();
   try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd'),wo=sp.get('wo');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}else if(wo){go('wo2');setTimeout(()=>{const w=woFind(+wo);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},300);}}catch(e){}}
 async function init(){if(!TOKEN)return;
   try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
   catch{localStorage.removeItem('tk');TOKEN=null;}}
+try{applyTheme();}catch(e){}
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();if(ME)openSearch();}if(e.key==='Escape'){closeSearch();}});
 init();
 </script>
 </body>
