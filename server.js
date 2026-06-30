@@ -101,7 +101,8 @@ function seedAppData() {
     partUsage: [],
     inspections: [],
     checkItems: ['Хэт халалт', 'Чимээ шуугиан', 'Тоосжилт', 'Холболт сул эсэх', 'Үнэр / утаа', 'Чичиргээ', 'Тос / тосолгоо'],
-    seq: { report: 2, wo: 3, iso: 3, energy: 2, part: 3, usage: 0, inspection: 0 }
+    staff: [], audit: [], perms: {}, naryad: [], attendance: [],
+    seq: { report: 2, wo: 3, iso: 3, energy: 2, part: 3, usage: 0, inspection: 0, staff: 0, att: 0, naryad: 0, audit: 0 }
   };
 }
 function seedDB() {
@@ -145,7 +146,7 @@ async function sendTelegram(text) {
 
 /* ---------- App ---------- */
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
 
 function auth(req, res, next) {
   const h = req.headers.authorization || '';
