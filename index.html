@@ -1478,7 +1478,7 @@ function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй')
   notify('🧾 ШИНЭ НАРЯД ('+(w.prio||'—')+')\n'+w.title+(w.equip||w.pd?'\nТоног: '+(w.equip||w.pd):'')+'\nГүйцэтгэгч: '+(who.join(', ')||'—')+(w.plannedFinish?'\nДуусах: '+w.plannedFinish.replace('T',' '):'')+'\nҮүсгэсэн: '+(ME?ME.name:'')+'\n🔗 Нээх: '+link);
   window._woEquips=[];window._woPds=[];save();toast('Наряд үүслээ ✓ — гүйцэтгэгчид мэдэгдэл илгээгдлээ');render();}
 function isAssignedToMe(w){if(!ME)return false;const me=(DB.staff||[]).filter(s=>s.name===ME.name).map(s=>s.id);return (w.assignees||[]).some(id=>me.includes(id));}
-function canOperateThis(w){return ME&&(canCreateWo()||can('wo_close')||isAssignedToMe(w));}
+function canOperateThis(w){return ME&&isAssignedToMe(w);}
 function woAccept(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}w.status='Accepted';w.acceptedBy=ME?ME.name:'';w.acceptedAt=new Date().toISOString().slice(0,16);audit('Наряд хүлээж авав',w.no);save();toast('Хүлээж авлаа ✓');render();}
 function woStart(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}if(!w.sessions)w.sessions=[];w.runningSince=new Date().toISOString().slice(0,16);w.status='In Progress';if(!w.actualStart)w.actualStart=w.runningSince;save();toast('Ажил эхэллээ ▶');render();}
 function woPause(id){const w=woFind(id);if(!w)return;if(w.runningSince){w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}w.status='On Hold';save();toast('Түр зогссон ⏸');render();}
@@ -1542,7 +1542,7 @@ function opsCounts(){const today=iso(new Date());const att=(DB.attendance||[]).f
     ext:att.filter(a=>a.status==='Сунаж ажилласан'||a.status==='Шөнийн ээлжээр сунаж').length,callout:c('Дуудагдан ажилласан'),
     open:nar.filter(w=>['New','Assigned','Accepted'].includes(w.status)).length,prog:nar.filter(w=>w.status==='In Progress').length,wait:nar.filter(w=>['On Hold','Waiting Approval'].includes(w.status)).length,
     done:nar.filter(WO_DONE).length};}
-function woControls(w){const b=[];const mine=canOperateThis(w);
+function woControls(w){const b=[];const mine=isAssignedToMe(w);
   if(mine&&(w.status==='New'||w.status==='Assigned'))b.push(`<button class="btn btn-sm" onclick="woAccept(${w.id})">✋ Хүлээж авах</button>`);
   if(mine&&w.status==='Accepted')b.push(`<button class="btn btn-sm" onclick="woStart(${w.id})">▶ Эхлэх</button>`);
   if(mine&&w.status==='In Progress'){b.push(`<button class="btn btn-sm btn-ghost" onclick="woPause(${w.id})">⏸ Зогсоох</button>`);b.push(`<button class="btn btn-sm" onclick="woComplete(${w.id})">✅ Дуусгах</button>`);}
@@ -1585,7 +1585,8 @@ function viewWoSheet(){const w=woFind(window._woSheetId);if(!w)return '<div clas
       <div style="text-align:right;margin-top:18px;font-size:11px;color:#777">Хэвлэсэн: ${esc(ME?ME.name:'')} · ${iso(new Date())}</div>
     </div>`;}
 function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();window._woEquips=[];window._woPds=[];const o=opsCounts();const mgr=canCreateWo();
-  const list=[...DB.naryad].sort((a,b)=>(WO_DONE(a)?1:0)-(WO_DONE(b)?1:0)||(a.createdAt<b.createdAt?1:-1));
+  const isMgr=canCreateWo()||can('wo_close');let list=[...DB.naryad];if(!isMgr)list=list.filter(w=>isAssignedToMe(w));
+  list.sort((a,b)=>(WO_DONE(a)?1:0)-(WO_DONE(b)?1:0)||(a.createdAt<b.createdAt?1:-1));
   const assignStaff=[...DB.staff].filter(s=>!['ADMIN','CHIEF','AUTO_CHIEF'].includes(s.role));
   const byRole={};assignStaff.forEach(s=>{(byRole[s.role]=byRole[s.role]||[]).push(s);});
   const roleOrder=ROLES.map(r=>r[0]).filter(r=>byRole[r]);
@@ -1603,7 +1604,7 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();window._woEquips=[];
       <td><span class="badge ${wo2Badge[w.status]||'b-muted'}">${esc(wo2Label[w.status]||w.status)}</span></td>
       <td style="white-space:nowrap">${woControls(w)} ${canDelete()?delBtn('delWO('+w.id+')'):''}</td></tr>`;}).join('');
   return `<div class="glass card" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <b style="font-size:14px">🧾 Наряд / Work Order</b>
+      <b style="font-size:14px">🧾 Наряд / Work Order</b>${!isMgr?'<span class="badge b-accent" style="font-size:11px">Зөвхөн миний ажлууд</span>':''}
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn btn-sm" onclick="go('inspect')">✅ Үзлэг хийх</button>
         <button class="btn btn-sm btn-ghost" onclick="go('qr')">🔲 QR кодууд</button></div></div>
