@@ -233,6 +233,7 @@ function attTone(r){const k=attKey(r);return k?ATT2BY[k].tone:'#5b6680';}
 const canEditWoStatus=()=>can('wo_edit');
 // Наряд / Work Order модуль
 const WO2_STATES=['New','Assigned','Accepted','In Progress','On Hold','Waiting Approval','Completed','Closed','Cancelled'];
+const WO_TYPES=['Үзлэг','Төлөвлөгөөт','Төлөвлөгөөт бус','PM','CM','Шуурхай дуудлага','АМХ','Онцлох ажил'];
 const wo2Label={'New':'Шинэ','Assigned':'Оноосон','Accepted':'Хүлээж авсан','In Progress':'Хийгдэж буй','On Hold':'Түр зогссон','Waiting Approval':'Батлахыг хүлээж буй','Completed':'Дууссан','Closed':'Хаасан','Cancelled':'Цуцалсан','Open':'Шинэ','Waiting':'Түр зогссон'};
 const wo2Badge={'New':'b-accent','Assigned':'b-accent','Accepted':'b-teal','In Progress':'b-warn','On Hold':'b-muted','Waiting Approval':'b-warn','Completed':'b-ok','Closed':'b-ok','Cancelled':'b-danger','Open':'b-accent','Waiting':'b-muted'};
 const WO_DONE=w=>w.status==='Completed'||w.status==='Closed';
@@ -966,15 +967,11 @@ function viewQR(){if(typeof qrcode==='undefined')return '<div class="note">QR с
     <button class="btn btn-sm" style="margin-left:auto" onclick="window.print()">🖨 Хэвлэх / PDF хадгалах</button></div>
   <div class="note" style="margin-bottom:12px">QR кодууд доор шууд харагдана. "🖨 Хэвлэх" дарж наалт цаасан дээр хэвлэх эсвэл PDF болгож хадгална. Уншуулахад ${mode==='pd'?'тухайн PD дугаарын':'тухайн тоноглолын'} хуудас нээгдэнэ.</div>
   <div id="qrprint" class="glass card">${qrGridHTML(mode,q).html}</div>`;}
-function qrGroups(mode,q){q=(q||'').toLowerCase();
-  if(mode==='pd'){const arr=(DB.pdList||[]).filter(p=>!q||p.toLowerCase().includes(q)).map(p=>({tag:p,name:'PD дугаар',url:location.origin+'/?pd='+encodeURIComponent(p)}));return [['PD дугаарууд',arr]];}
-  const eqs=(DB.equip||[]).filter(e=>!q||(e.tag+' '+(e.name||'')+' '+(e.area||'')+' '+(e.pd||'')).toLowerCase().includes(q));
-  const g={};eqs.forEach(e=>{const key=e.area||e.pd||'Ангилалгүй';(g[key]=g[key]||[]).push({tag:e.tag,name:e.name||'',url:qrUrl(e.tag)});});
-  return Object.keys(g).sort().map(k=>[k,g[k]]);}
-function qrGridHTML(mode,q){const groups=qrGroups(mode,q);let total=0,html='';
-  groups.forEach(([name,arr])=>{if(!arr.length)return;total+=arr.length;
-    html+='<div style="font-weight:700;margin:12px 0 6px" class="t-accent">📂 '+esc(name)+' <span class="muted" style="font-weight:400;font-size:12px">('+arr.length+')</span></div><div class="qrgrid">'+arr.slice(0,400).map(it=>`<div class="qrcell"><img src="${qrDataUrl(it.url,4)}"><div class="t">${esc(it.tag)}</div><div class="n">${esc(it.name)}</div></div>`).join('')+'</div>';});
-  return {html:html||'<div class="muted" style="padding:20px">Алга байна — тоног/PD нэмнэ үү.</div>',total};}
+function qrGridHTML(mode,q){q=(q||'').toLowerCase();let arr;
+  if(mode==='pd')arr=(DB.pdList||[]).filter(p=>!q||p.toLowerCase().includes(q)).map(p=>({tag:p,name:'PD дугаар',url:location.origin+'/?pd='+encodeURIComponent(p)}));
+  else arr=(DB.equip||[]).filter(e=>!q||(e.tag+' '+(e.name||'')+' '+(e.area||'')+' '+(e.pd||'')).toLowerCase().includes(q)).map(e=>({tag:e.tag,name:e.name||'',url:qrUrl(e.tag)}));
+  const shown=arr.slice(0,400);
+  return {html:'<div class="qrgrid">'+(shown.map(it=>`<div class="qrcell"><img src="${qrDataUrl(it.url,4)}"><div class="t">${esc(it.tag)}</div><div class="n">${esc(it.name)}</div></div>`).join('')||'<div class="muted" style="padding:20px">Алга байна.</div>')+'</div>',total:arr.length};}
 function qrSearchUpdate(v){window._qrSearch=v;const mode=window._qrMode||'equip';const q=(v||'').toLowerCase();
   const g=qrGridHTML(mode,q);const el=document.getElementById('qrprint');if(el)el.innerHTML=g.html;
   const c=document.getElementById('qrCount');if(c)c.textContent=g.total+' ширхэг';}
@@ -1453,7 +1450,7 @@ function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй')
   const assignees=Array.from(document.querySelectorAll('.wo_as:checked')).map(c=>+c.value);
   const safety={};SAFE_LABELS.forEach(([k])=>{const el=document.getElementById('saf_'+k);safety[k]=!!(el&&el.checked);});
   DB.naryad.push({id:++DB.seq.naryad,no:'ND'+Date.now().toString().slice(-9),title:val('wo_title').trim(),desc:val('wo_desc').trim(),
-    assignees,area:val('wo_area'),equip:val('wo_equip').trim(),pd:val('wo_pd').trim(),prio:val('wo_prio'),
+    assignees,area:val('wo_area'),equip:val('wo_equip').trim(),pd:val('wo_pd').trim(),type:val('wo_type'),prio:val('wo_prio'),
     plannedStart:val('wo_pstart'),plannedFinish:val('wo_pfinish'),status:assignees.length?'Assigned':'New',sessions:[],runningSince:null,
     safety,files:[],acceptedBy:'',rejectNote:'',completeNote:'',photos:[],parts:[],createdBy:ME?ME.name:'',createdAt:new Date().toISOString().slice(0,16),actualStart:'',completedAt:'',finishedAt:''});
   const w=DB.naryad[DB.naryad.length-1];const who=(w.assignees||[]).map(staffName);
@@ -1576,7 +1573,7 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();
     const safe=w.safety?SAFE_LABELS.filter(([k])=>w.safety[k]).map(([k,l])=>'<span class="badge b-ok" style="font-size:10px;margin:1px">'+l+'</span>').join(''):'';
     const files=(w.files&&w.files.length)?w.files.map(woFileLink).join(''):'';
     return `<tr><td class="t-accent" style="font-family:monospace;font-size:11px">${esc(w.no)}</td>
-      <td style="max-width:240px"><b>${esc(w.title)||'—'}</b>${w.desc?'<div class="muted" style="font-size:12px">'+esc(w.desc)+'</div>':''}${w.equip||w.pd?'<div class="muted" style="font-size:11px">'+esc(w.equip||'')+' '+esc(w.pd||'')+'</div>':''}${safe?'<div style="margin-top:3px">'+safe+'</div>':''}${ph?'<div style="margin-top:3px">'+ph+'</div>':''}${files?'<div style="margin-top:3px">'+files+'</div>':''}${w.rejectNote?'<div style="font-size:11px" class="t-danger">✖ Татгалзсан: '+esc(w.rejectNote)+'</div>':''}${w.completeNote?'<div style="font-size:11px" class="t-ok">✓ '+esc(w.completeNote)+'</div>':''}</td>
+      <td style="max-width:240px"><b>${esc(w.title)||'—'}</b>${w.type?' <span class="badge b-teal" style="font-size:10px">'+esc(w.type)+'</span>':''}${w.desc?'<div class="muted" style="font-size:12px">'+esc(w.desc)+'</div>':''}${w.equip||w.pd?'<div class="muted" style="font-size:11px">'+esc(w.equip||'')+' '+esc(w.pd||'')+'</div>':''}${safe?'<div style="margin-top:3px">'+safe+'</div>':''}${ph?'<div style="margin-top:3px">'+ph+'</div>':''}${files?'<div style="margin-top:3px">'+files+'</div>':''}${w.rejectNote?'<div style="font-size:11px" class="t-danger">✖ Татгалзсан: '+esc(w.rejectNote)+'</div>':''}${w.completeNote?'<div style="font-size:11px" class="t-ok">✓ '+esc(w.completeNote)+'</div>':''}</td>
       <td style="font-size:12px">${(w.assignees||[]).map(staffName).map(esc).join(', ')||'—'}</td>
       <td style="font-size:11px" class="muted">${w.plannedFinish?'Товлосон: '+esc(w.plannedFinish.replace('T',' ')):'—'}</td>
       <td style="text-align:center;font-weight:700" class="t-teal">${woWorked(w)}<div style="font-size:10px;font-weight:400" class="muted">мин</div></td>
@@ -1595,6 +1592,7 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();
     ${mgr?`<div class="glass card" style="margin-bottom:16px"><div class="section-title">➕ Шинэ наряд (Work Order) үүсгэх</div>
       <form onsubmit="createWO(event)"><div class="col3">
         <label class="field" style="grid-column:span 2"><span>Гарчиг *</span><input id="wo_title" required placeholder="ж: PD-31 самбарын үзлэг"></label>
+        <label class="field"><span>Ажлын төрөл</span><select id="wo_type">${optList(WO_TYPES,'Төлөвлөгөөт')}</select></label>
         <label class="field"><span>Priority</span><select id="wo_prio">${optList(PRIOS,'Дунд')}</select></label>
         <label class="field" style="grid-column:span 3"><span>Тайлбар</span><input id="wo_desc" placeholder="хийх ажлын дэлгэрэнгүй"></label>
         <label class="field"><span>Тоног / TAG</span><input id="wo_equip" list="equipList" placeholder="MG-101"></label>
