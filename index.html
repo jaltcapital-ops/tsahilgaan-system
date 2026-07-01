@@ -1454,16 +1454,16 @@ function exportAttend(){const m=attMonth();const sum=attMonthSummary(m);
 function woFind(id){return (DB.naryad||[]).find(w=>w.id===id);}
 function woWorked(w){let ms=0;(w.sessions||[]).forEach(s=>{if(s.start&&s.end)ms+=new Date(s.end)-new Date(s.start);});if(w.runningSince)ms+=Date.now()-new Date(w.runningSince);return Math.max(0,Math.round(ms/60000));}
 function staffName(id){const s=(DB.staff||[]).find(x=>x.id===id);return s?s.name:'?';}
-function woEqSearch(v){const q=(v||'').toLowerCase();const el=document.getElementById('wo_eqres');if(!el)return;
-  const list=q?(DB.equip||[]).filter(e=>(e.tag+' '+(e.name||'')).toLowerCase().includes(q)&&!(window._woEquips||[]).includes(e.tag)).slice(0,10):[];
-  el.innerHTML=list.map(e=>`<span class="badge b-accent" style="cursor:pointer;margin:2px" onclick="woEqAdd('${esc(e.tag)}')">+ ${esc(e.tag)} · ${esc(e.name||'')}</span>`).join('');}
-function woEqAdd(tag){if(!window._woEquips)window._woEquips=[];if(!window._woEquips.includes(tag))window._woEquips.push(tag);const s=document.getElementById('wo_eqsearch');if(s)s.value='';const r=document.getElementById('wo_eqres');if(r)r.innerHTML='';woEqRender();}
-function woEqRender(){const el=document.getElementById('wo_eqsel');if(!el)return;el.innerHTML=(window._woEquips||[]).map((t,i)=>`<span class="badge b-teal" style="margin:2px">${esc(t)} <a onclick="window._woEquips.splice(${i},1);woEqRender()" style="cursor:pointer;color:#ff4d4f">✕</a></span>`).join('');}
-function woPdSearch(v){const q=(v||'').toLowerCase();const el=document.getElementById('wo_pdres');if(!el)return;
-  const list=q?(DB.pdList||[]).filter(p=>String(p).toLowerCase().includes(q)&&!(window._woPds||[]).includes(p)).slice(0,10):[];
-  el.innerHTML=list.map(p=>`<span class="badge b-accent" style="cursor:pointer;margin:2px" onclick="woPdAdd('${esc(p)}')">+ ${esc(p)}</span>`).join('');}
-function woPdAdd(pd){if(!window._woPds)window._woPds=[];if(!window._woPds.includes(pd))window._woPds.push(pd);const s=document.getElementById('wo_pdsearch');if(s)s.value='';const r=document.getElementById('wo_pdres');if(r)r.innerHTML='';woPdRender();}
-function woPdRender(){const el=document.getElementById('wo_pdsel');if(!el)return;el.innerHTML=(window._woPds||[]).map((t,i)=>`<span class="badge b-teal" style="margin:2px">${esc(t)} <a onclick="window._woPds.splice(${i},1);woPdRender()" style="cursor:pointer;color:#ff4d4f">✕</a></span>`).join('');}
+function woEqCheckHTML(q){q=(q||'').toLowerCase();const sel=new Set(window._woEquips||[]);
+  const list=(DB.equip||[]).filter(e=>!q||(e.tag+' '+(e.name||'')).toLowerCase().includes(q)).slice(0,400);
+  return list.map(e=>`<label style="display:block;padding:4px 2px;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.12)"><input type="checkbox" class="wo_eqchk" value="${esc(e.tag)}" ${sel.has(e.tag)?'checked':''} onchange="woEqToggle(this)" style="width:auto"> <b>${esc(e.tag)}</b> <span class="muted" style="font-size:11px">${esc(e.name||'')}</span></label>`).join('')||'<div class="muted" style="padding:8px">Илэрц алга</div>';}
+function woEqFilter(v){const el=document.getElementById('wo_eqlist');if(el)el.innerHTML=woEqCheckHTML(v);}
+function woEqToggle(cb){if(!window._woEquips)window._woEquips=[];const t=cb.value;const i=window._woEquips.indexOf(t);if(cb.checked&&i<0)window._woEquips.push(t);if(!cb.checked&&i>=0)window._woEquips.splice(i,1);}
+function woPdCheckHTML(q){q=(q||'').toLowerCase();const sel=new Set(window._woPds||[]);
+  const list=(DB.pdList||[]).filter(p=>!q||String(p).toLowerCase().includes(q)).slice(0,400);
+  return list.map(p=>`<label style="display:inline-flex;align-items:center;gap:4px;margin:3px 10px 3px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="wo_pdchk" value="${esc(p)}" ${sel.has(p)?'checked':''} onchange="woPdToggle(this)" style="width:auto"> ${esc(p)}</label>`).join('')||'<div class="muted" style="padding:8px">Илэрц алга</div>';}
+function woPdFilter(v){const el=document.getElementById('wo_pdlist');if(el)el.innerHTML=woPdCheckHTML(v);}
+function woPdToggle(cb){if(!window._woPds)window._woPds=[];const t=cb.value;const i=window._woPds.indexOf(t);if(cb.checked&&i<0)window._woPds.push(t);if(!cb.checked&&i>=0)window._woPds.splice(i,1);}
 function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй');return;}
   if(!DB.naryad)DB.naryad=[];if(!DB.seq.naryad)DB.seq.naryad=0;
   const assignees=Array.from(document.querySelectorAll('.wo_as:checked')).map(c=>+c.value);
@@ -1472,10 +1472,10 @@ function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй')
     assignees,area:val('wo_area'),equip:(window._woEquips||[]).join(', '),pd:(window._woPds||[]).join(', '),equips:(window._woEquips||[]).slice(),pds:(window._woPds||[]).slice(),type:val('wo_type'),prio:val('wo_prio'),
     plannedStart:val('wo_pstart'),plannedFinish:val('wo_pfinish'),status:assignees.length?'Assigned':'New',sessions:[],runningSince:null,
     safety,files:[],acceptedBy:'',rejectNote:'',completeNote:'',photos:[],parts:[],createdBy:ME?ME.name:'',createdAt:new Date().toISOString().slice(0,16),actualStart:'',completedAt:'',finishedAt:''});
-  const w=DB.naryad[DB.naryad.length-1];const who=(w.assignees||[]).map(staffName);
-  who.forEach(nm=>pushNotif(nm,'🧾 Танд шинэ наряд оноогдлоо: '+w.title+' ('+(w.prio||'—')+')','wo'));
+  const w=DB.naryad[DB.naryad.length-1];const who=(w.assignees||[]).map(staffName);const link=location.origin+'/?wo='+w.id;
+  who.forEach(nm=>pushNotif(nm,'🧾 Танд шинэ наряд оноогдлоо: '+w.title+' ('+(w.prio||'—')+')',link));
   audit('Наряд үүсгэв',w.title);
-  notify('🧾 ШИНЭ НАРЯД ('+(w.prio||'—')+')\n'+w.title+(w.equip||w.pd?'\nТоног: '+(w.equip||w.pd):'')+'\nГүйцэтгэгч: '+(who.join(', ')||'—')+(w.plannedFinish?'\nДуусах: '+w.plannedFinish.replace('T',' '):'')+'\nҮүсгэсэн: '+(ME?ME.name:''));
+  notify('🧾 ШИНЭ НАРЯД ('+(w.prio||'—')+')\n'+w.title+(w.equip||w.pd?'\nТоног: '+(w.equip||w.pd):'')+'\nГүйцэтгэгч: '+(who.join(', ')||'—')+(w.plannedFinish?'\nДуусах: '+w.plannedFinish.replace('T',' '):'')+'\nҮүсгэсэн: '+(ME?ME.name:'')+'\n🔗 Нээх: '+link);
   window._woEquips=[];window._woPds=[];save();toast('Наряд үүслээ ✓ — гүйцэтгэгчид мэдэгдэл илгээгдлээ');render();}
 function isAssignedToMe(w){if(!ME)return false;const me=(DB.staff||[]).filter(s=>s.name===ME.name).map(s=>s.id);return (w.assignees||[]).some(id=>me.includes(id));}
 function canOperateThis(w){return ME&&(canCreateWo()||can('wo_close')||isAssignedToMe(w));}
@@ -1521,7 +1521,11 @@ function finalizeWO(id){const w=woFind(id);if(!w)return;
   w.parts.forEach(pp=>{const pt=(DB.parts||[]).find(x=>x.id===pp.partId);if(pt){pt.qty=Math.max(0,+pt.qty-pp.qty);if(!DB.partUsage)DB.partUsage=[];if(!DB.seq.usage)DB.seq.usage=0;DB.partUsage.push({id:++DB.seq.usage,partId:pt.id,date:iso(new Date()),qty:pp.qty,by:ME?ME.name:'',note:'WO '+w.no});}});
   w.status='Waiting Approval';w.completedAt=new Date().toISOString().slice(0,16);
   window._newPhotos=[];window._woParts=[];window._woFiles=[];const md=document.getElementById('woModal');if(md)md.remove();
-  audit('Наряд дуусгав (батлуулахаар)',w.no+' · '+woWorked(w)+' мин');save();toast('Дууслаа — Мастер баталгаажуулахыг хүлээж байна ✓');render();}
+  audit('Наряд дуусгав (батлуулахаар)',w.no+' · '+woWorked(w)+' мин');
+  const link=location.origin+'/?wo='+w.id;
+  if(w.createdBy)pushNotif(w.createdBy,'✅ Наряд дууслаа: '+w.title+' — '+(ME?ME.name:'')+' гүйцэтгэлээ ('+woWorked(w)+' мин)',link);
+  notify('✅ АЖИЛ ДУУССАН — батлана уу\n'+w.title+'\nГүйцэтгэсэн: '+(ME?ME.name:'')+'\nХугацаа: '+woWorked(w)+' мин'+(w.completeNote?'\nТайлбар: '+w.completeNote:'')+'\nҮүсгэсэн: '+(w.createdBy||'—')+'\n🔗 '+link);
+  save();toast('Дууслаа — Мастер баталгаажуулахыг хүлээж байна ✓');render();}
 function woCancel(id){const w=woFind(id);if(!w)return;if(!confirm('Энэ нарядыг цуцлах уу?'))return;if(w.runningSince){w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}w.status='Cancelled';audit('Наряд цуцлав',w.no);save();render();}
 function delWO(id){if(!confirm('Энэ нарядыг устгах уу?'))return;const w=woFind(id);audit('Наряд устгав',w?w.no:String(id));DB.naryad=(DB.naryad||[]).filter(w=>w.id!==id);save();render();}
 function woKPI(){const map={};(DB.staff||[]).forEach(s=>map[s.id]={name:s.name,role:s.role,shift:s.shift,done:0,onTime:0,minutes:0});
@@ -1614,12 +1618,12 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();window._woEquips=[];
         <label class="field"><span>Ажлын төрөл</span><select id="wo_type">${optList(WO_TYPES,'Төлөвлөгөөт')}</select></label>
         <label class="field"><span>Priority</span><select id="wo_prio">${optList(PRIOS,'Дунд')}</select></label>
         <label class="field" style="grid-column:span 3"><span>Тайлбар</span><input id="wo_desc" placeholder="хийх ажлын дэлгэрэнгүй"></label>
-        <div class="field" style="grid-column:span 3"><span>Тоног / TAG (хайж олноор сонгоно)</span>
-          <input id="wo_eqsearch" placeholder="TAG/нэр хайх — жагсаалтаас дарж нэмнэ" oninput="woEqSearch(this.value)">
-          <div id="wo_eqres" style="margin-top:4px"></div><div id="wo_eqsel" style="margin-top:4px"></div></div>
-        <div class="field" style="grid-column:span 3"><span>PD дугаар (хайж олноор сонгоно)</span>
-          <input id="wo_pdsearch" placeholder="PD хайх — жагсаалтаас дарж нэмнэ" oninput="woPdSearch(this.value)">
-          <div id="wo_pdres" style="margin-top:4px"></div><div id="wo_pdsel" style="margin-top:4px"></div></div>
+        <div class="field" style="grid-column:span 3"><span>Тоног / TAG — ☑-ээр олноор сонгоно</span>
+          <input id="wo_eqsearch" placeholder="TAG/нэр хайх" oninput="woEqFilter(this.value)">
+          <div id="wo_eqlist" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:4px">${woEqCheckHTML('')}</div></div>
+        <div class="field" style="grid-column:span 3"><span>PD дугаар — ☑-ээр олноор сонгоно</span>
+          <input id="wo_pdsearch" placeholder="PD хайх" oninput="woPdFilter(this.value)">
+          <div id="wo_pdlist" style="max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px;margin-top:4px">${woPdCheckHTML('')}</div></div>
         <label class="field"><span>Байршил</span><select id="wo_area"><option value="">—</option>${optList(DB.areas)}</select></label>
         <label class="field"><span>Эхлэх (товлосон)</span><input type="datetime-local" id="wo_pstart"></label>
         <label class="field"><span>Дуусах (товлосон)</span><input type="datetime-local" id="wo_pfinish"></label>
@@ -1667,7 +1671,8 @@ function viewNotifs(){const mine=(DB.notifs||[]).filter(n=>n.toName===ME.name||n
       <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="enableBrowserNotif()">🔔 Browser мэдэгдэл асаах</button></div>
     <div class="glass card" style="padding:0;overflow:auto"><table>
       <thead><tr><th>Огноо/цаг</th><th>Мэдэгдэл</th></tr></thead>
-      <tbody>${mine.map(n=>`<tr><td style="white-space:nowrap;font-size:12px" class="muted">${esc(n.ts)}</td><td>${esc(n.text)}</td></tr>`).join('')||'<tr><td colspan="2" class="muted" style="text-align:center;padding:24px">Мэдэгдэл алга.</td></tr>'}</tbody></table></div>`;}
+      <tbody>${mine.map(n=>{const wo=(n.link&&n.link.indexOf('?wo=')>=0)?n.link.split('?wo=')[1]:'';return `<tr ${wo?'style="cursor:pointer" onclick="openWoFromNotif('+wo+')"':''}><td style="white-space:nowrap;font-size:12px" class="muted">${esc(n.ts)}</td><td>${esc(n.text)}${wo?' <span class="badge b-accent" style="font-size:10px">🔗 Нээх</span>':''}</td></tr>`;}).join('')||'<tr><td colspan="2" class="muted" style="text-align:center;padding:24px">Мэдэгдэл алга.</td></tr>'}</tbody></table></div>`;}
+function openWoFromNotif(id){go('wo2');setTimeout(()=>{const w=woFind(+id);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},250);}
 /* ---- LOTO модуль (Sprint 4) ---- */
 const LOTO_STATES=['Requested','Prepared','Applied','Verified','Released','Archived','Cancelled'];
 const lotoLabel={'Requested':'Хүсэлт','Prepared':'Бэлтгэсэн','Applied':'Тавьсан','Verified':'Баталгаажуулсан','Released':'Чөлөөлсөн','Archived':'Архивласан','Cancelled':'Цуцалсан'};
