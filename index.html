@@ -1173,14 +1173,19 @@ const SEED_STAFF=[
  {name:'Нэмэхбаяр Нямсайхан',role:'ISO_TECH',shift:'Г'},{name:'Батсуурь Эрдэнэбаяр',role:'ELEC',shift:'Г'},
  {name:'Ариунсанаа Очбадрах',role:'AUTO_CHIEF',shift:'Г'}
 ];
+const SUM_STAFF=new Set(['Зоригт Дэрийлаамятав','Болдбаатар Мягмар','Бүрэнтогтох Эрдэнэчулуун','Эрдэнэгавъяа Энхжаргал','Соргогцэцэг Доржсэмбэ','Эрдэнэбат Ихбаяр','Ихбаяр Намсан','Ариунсанаа Очбадрах']);
+function staffLoc(s){return (s&&s.loc)?s.loc:((s&&SUM_STAFF.has(s.name))?'Сум':'УБ');}
+// Сум = 13 цаг (зам цаггүй), УБ = 12 цаг
+function shiftHours(s,k){if(k==='day'||k==='night')return staffLoc(s)==='Сум'?13:12;return null;}
 function ensureStaff(){if(!DB.seq.staff)DB.seq.staff=0;
-  if(!DB.staff){DB.staff=SEED_STAFF.map(p=>({id:++DB.seq.staff,name:p.name,role:p.role,shift:p.shift,phone:''}));save();}}
+  if(!DB.staff){DB.staff=SEED_STAFF.map(p=>({id:++DB.seq.staff,name:p.name,role:p.role,shift:p.shift,phone:'',loc:SUM_STAFF.has(p.name)?'Сум':'УБ'}));save();}
+  else{let ch=false;DB.staff.forEach(p=>{if(!p.loc){p.loc=SUM_STAFF.has(p.name)?'Сум':'УБ';ch=true;}});if(ch)save();}}
 function viewHR(){ensureStaff();const isAdmin=ME&&ME.role==='ADMIN';
   const byShift={};SHIFTS.forEach(s=>byShift[s]=[]);DB.staff.forEach(p=>{(byShift[p.shift]||(byShift[p.shift]=[])).push(p);});
   const total=DB.staff.length;
   const card=s=>`<div class="glass card"><div class="section-title">🕘 Ээлж ${s} <span class="badge b-accent" style="margin-left:auto">${(byShift[s]||[]).length} хүн</span></div>
-    <div style="overflow:auto"><table><thead><tr><th>Овог нэр</th><th>Албан тушаал</th><th>Утас</th>${isAdmin?'<th></th>':''}</tr></thead><tbody>
-    ${(byShift[s]||[]).map(p=>`<tr><td>${esc(p.name)}</td><td><span class="badge b-muted">${esc(roleLabel(p.role))}</span></td><td class="muted">${esc(p.phone)||'—'}</td>${isAdmin?`<td style="text-align:right">${delBtn('delStaff('+p.id+')')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${isAdmin?4:3}" class="muted" style="text-align:center;padding:14px">—</td></tr>`}
+    <div style="overflow:auto"><table><thead><tr><th>Овог нэр</th><th>Албан тушаал</th><th>Харьяалал</th><th>Утас</th>${isAdmin?'<th></th>':''}</tr></thead><tbody>
+    ${(byShift[s]||[]).map(p=>`<tr><td>${esc(p.name)}</td><td><span class="badge b-muted">${esc(roleLabel(p.role))}</span></td><td><span class="badge ${staffLoc(p)==='Сум'?'b-warn':'b-teal'}">${esc(staffLoc(p))}</span></td><td class="muted">${esc(p.phone)||'—'}</td>${isAdmin?`<td style="text-align:right">${delBtn('delStaff('+p.id+')')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${isAdmin?5:4}" class="muted" style="text-align:center;padding:14px">—</td></tr>`}
     </tbody></table></div></div>`;
   return `<div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
       ${kpiCard('Нийт ажилтан',total,'accent')}${SHIFTS.map(s=>kpiCard('Ээлж '+s,(byShift[s]||[]).length,'teal')).join('')}</div>
@@ -1189,6 +1194,7 @@ function viewHR(){ensureStaff();const isAdmin=ME&&ME.role==='ADMIN';
         <label class="field"><span>Овог нэр *</span><input id="s_name" required placeholder="ж: Бат-Эрдэнэ"></label>
         <label class="field"><span>Албан тушаал *</span><select id="s_role">${ROLES.filter(r=>r[0]!=='ADMIN'&&r[0]!=='VIEWER').map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
         <label class="field"><span>Ээлж *</span><select id="s_shift">${SHIFTS.map(s=>`<option>${s}</option>`).join('')}</select></label>
+        <label class="field"><span>Харьяалал (цаг)</span><select id="s_loc"><option>УБ</option><option>Сум</option></select></label>
         <label class="field"><span>Утас</span><input id="s_phone" placeholder="9911...."></label>
         <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form>
       <div class="addbar" style="margin-top:10px">
@@ -1198,10 +1204,10 @@ function viewHR(){ensureStaff();const isAdmin=ME&&ME.role==='ADMIN';
         <span class="muted" style="font-size:12px">Багана: Овог нэр · Албан тушаал · Ээлж(А/Б/В/Г) · Утас</span></div></div>`:''}
     <div class="grid col2" style="gap:16px;margin-bottom:16px">${SHIFTS.map(card).join('')}</div>`;}
 function addStaff(e){e.preventDefault();ensureStaff();const name=val('s_name').trim();if(!name)return;
-  DB.staff.push({id:++DB.seq.staff,name,role:val('s_role'),shift:val('s_shift'),phone:val('s_phone').trim()});
+  DB.staff.push({id:++DB.seq.staff,name,role:val('s_role'),shift:val('s_shift'),loc:val('s_loc'),phone:val('s_phone').trim()});
   save();toast('Ажилтан нэмэгдлээ ✓');render();}
 function delStaff(id){if(!confirm('Энэ ажилтныг устгах уу?'))return;DB.staff=DB.staff.filter(p=>p.id!==id);save();render();}
-function exportStaff(){const rows=[['Овог нэр','Албан тушаал','Ээлж','Утас']];(DB.staff||[]).forEach(p=>rows.push([p.name,roleLabel(p.role),p.shift,p.phone||'']));downloadCSV('Eelj-bүrtgel',rows);}
+function exportStaff(){const rows=[['Овог нэр','Албан тушаал','Ээлж','Харьяалал','Утас']];(DB.staff||[]).forEach(p=>rows.push([p.name,roleLabel(p.role),p.shift,staffLoc(p),p.phone||'']));downloadCSV('Eelj-bүrtgel',rows);}
 function staffRoleFrom(t){t=(t||'').toLowerCase();
   if(t.includes('автомат')&&t.includes('ахлах'))return 'AUTO_CHIEF';
   if(t.includes('автомат')&&t.includes('инженер'))return 'AUTO_EE';
@@ -1241,7 +1247,7 @@ function editAttCell(sid,date){if(!canEditAttend()){toast('Зөвхөн адми
   o.innerHTML=`<div class="glass card" style="max-width:420px;width:100%">
     <div class="section-title">🕒 ${esc(s.name||'')} · ${date}</div>
     <label class="field"><span>Төлөв сонгох</span><select id="ec_type" onchange="attToggleHours()">${opts}</select></label>
-    <label class="field" id="ec_hwrap" style="margin-top:8px"><span>Ажилласан цаг</span><input id="ec_hours" type="number" step="0.5" oninput="attToggleHours()" value="${ex&&ex.hours!=null?ex.hours:12}"></label>
+    <label class="field" id="ec_hwrap" style="margin-top:8px"><span>Ажилласан цаг <span class="muted" style="font-weight:400">(${esc(staffLoc(s))}: ${staffLoc(s)==='Сум'?13:12}ц)</span></span><input id="ec_hours" type="number" step="0.5" oninput="attToggleHours()" value="${ex&&ex.hours!=null?ex.hours:(staffLoc(s)==='Сум'?13:12)}"></label>
     <label class="field" style="margin-top:8px"><span>→ Хэдэн өдөр дараалан бичих (Excel шиг чирэх)</span><input id="ec_fill" type="number" min="1" value="1"></label>
     <label class="field" style="margin-top:8px"><span>Тэмдэглэл</span><input id="ec_note" value="${ex?esc(ex.note||''):''}"></label>
     <div style="margin-top:10px;font-size:12px" class="muted">Excel код: <b id="ec_codeprev" class="t-accent"></b></div>
@@ -1268,7 +1274,7 @@ function autofillRotation(){if(!canEditAttend())return;ensureStaff();
   const order=prompt('Эхний 7 хоног аль ээлж? 1=Өдрөөр түрүүлж, 2=Шөнөөр түрүүлж','1');if(order===null)return;
   const nightFirst=order.trim()==='2';const base=new Date(start);if(isNaN(base)){toast('Огноо буруу');return;}
   for(let d=0;d<14;d++){const dt=new Date(base);dt.setDate(base.getDate()+d);const ds=iso(dt);
-    let k;if(d<7)k=nightFirst?'night':'day';else k=nightFirst?'day':'night';upsertAtt(sid,ds,k,12,'');}
+    let k;if(d<7)k=nightFirst?'night':'day';else k=nightFirst?'day':'night';upsertAtt(sid,ds,k,shiftHours(DB.staff[si],k),'');}
   for(let d=14;d<28;d++){const dt=new Date(base);dt.setDate(base.getDate()+d);upsertAtt(sid,iso(dt),'rosteroff',0,'');}
   save();toast('14/14 хуваарь (7 өдрөөр+7 шөнөөр+14 амралт) бөглөгдлөө ✓');render();}
 function bulkRotation(){if(!canEditAttend())return;ensureStaff();
@@ -1279,13 +1285,14 @@ function bulkRotation(){if(!canEditAttend())return;ensureStaff();
   DB.staff.forEach(s=>{const o=off[s.shift]||0;
     for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const diff=Math.round((new Date(ds)-base)/86400000);
       let ph=(((diff-o)%28)+28)%28;let k=ph<7?'day':(ph<14?'night':'rosteroff');
-      upsertAtt(s.id,ds,k,k==='rosteroff'?0:12,'');cnt++;}});
+      upsertAtt(s.id,ds,k,k==='rosteroff'?0:shiftHours(s,k),'');cnt++;}});
   save();toast('Бүх ажилтны хуваарь бөглөгдлөө ✓ ('+m+')');render();}
 /* ===== Roster Planner (Ээлжийн төлөвлөлт) ===== */
 const ROSTER_CODES=[
  {c:'Ө',k:'day',lbl:'Өдөр (N)',tone:'#2fd07a',hrs:12},{c:'Ш',k:'night',lbl:'Шөнө (N/8)',tone:'#2e8bff',hrs:12},
  {c:'а',k:'rosteroff',lbl:'Ростер амралт',tone:'#5b6680',hrs:0},{c:'эа',k:'shiftl',lbl:'Ээлжийн амралт',tone:'#7a869c',hrs:0},
  {c:'Нс',k:'ot',lbl:'Илүү цаг/сунаж',tone:'#ffb020',hrs:12},{c:'Нд',k:'callout',lbl:'Дуудагдсан',tone:'#ff7a45',hrs:12},
+ {c:'Шс',k:'ot',lbl:'Шөнийн сунаж',tone:'#e8992d',hrs:12},
  {c:'Нз',k:'road',lbl:'Замын цаг',tone:'#1ec8c8',hrs:10},{c:'ч',k:'leaveu',lbl:'Чөлөө',tone:'#9aa7bd',hrs:0},
  {c:'ө',k:'sick',lbl:'Өвчтэй',tone:'#ff4d4f',hrs:0},{c:'Т',k:'office',lbl:'Томилолт',tone:'#a78bfa',hrs:8}];
 const RC_BY=Object.fromEntries(ROSTER_CODES.map(x=>[x.c,x]));
@@ -1320,7 +1327,7 @@ function rConfirm(){if(!canConfirmRoster()){toast('Баталгаажуулах 
 function rUnconfirm(){if(!canConfirmRoster())return;const r=ensureRoster(rMonth());r.confirmed=false;save();render();}
 function rTransfer(){const r=ensureRoster(rMonth());if(!r.confirmed){toast('Эхлээд баталгаажуулна уу');return;}if(!canConfirmRoster()){toast('Эрхгүй');return;}
   if(!confirm(rMonth()+' сарын ростерийг Цаг бүртгэлд шилжүүлэх үү? (давхар бичлэг үүсэхгүй)'))return;
-  let cnt=0;Object.keys(r.cells).forEach(sid=>{const sidN=+sid;Object.keys(r.cells[sid]).forEach(ds=>{const rc=RC_BY[r.cells[sid][ds]];if(!rc)return;upsertAtt(sidN,ds,rc.k,rc.hrs,'');cnt++;});});
+  let cnt=0;Object.keys(r.cells).forEach(sid=>{const sidN=+sid;const s=(DB.staff||[]).find(x=>x.id===sidN);Object.keys(r.cells[sid]).forEach(ds=>{const rc=RC_BY[r.cells[sid][ds]];if(!rc)return;const h=shiftHours(s,rc.k);upsertAtt(sidN,ds,rc.k,h!=null?h:rc.hrs,'');cnt++;});});
   audit('Ростер→Цаг бүртгэл',rMonth()+' ('+cnt+' нүд)');save();toast(cnt+' нүд Цаг бүртгэлд шилжлээ ✓');}
 function exportRoster(){const m=rMonth();const r=ensureRoster(m);const nd=monthDays(m);const head=['Ажилтан','Албан тушаал','Ээлж'];for(let d=1;d<=nd;d++)head.push(String(d));const rows=[head];
   [...DB.staff].sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name)).forEach(s=>{const c=r.cells[s.id]||{};const row=[s.name,roleLabel(s.role),s.shift];for(let d=1;d<=nd;d++)row.push(c[m+'-'+String(d).padStart(2,'0')]||'');rows.push(row);});
@@ -1335,7 +1342,7 @@ function viewRoster(){if(!canEditAttend())return '<div class="glass card">Энэ
     for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const code=cells[ds]||'';const rc=RC_BY[code];
       tds+=`<td id="rc_${s.id}_${ds}" ${ed?`onmousedown="rPaintStart(${s.id},'${ds}')" onmouseenter="rPaintMove(${s.id},'${ds}')" oncontextmenu="rMenu(event,${s.id},'${ds}')"`:''} style="text-align:center;font-size:11px;font-weight:700;cursor:${ed?'cell':'default'};user-select:none;color:${code?'#0b0f1a':'#8ea2c0'};background:${rc?rc.tone:'transparent'};border:1px solid var(--line)">${code}</td>`;}
     const warn=rWarn(s.id)?' <span title="7-оос олон өдөр/шөнө дараалсан" style="color:#ff4d4f">⚠</span>':'';
-    return `<tr><td style="position:sticky;left:0;background:#11182b;white-space:nowrap;font-size:12px">${esc(s.name)}${warn}</td><td style="position:sticky;left:150px;background:#11182b;text-align:center"><span class="badge b-muted">${esc(s.shift)}</span></td>${tds}</tr>`;}).join('');
+    return `<tr><td style="position:sticky;left:0;background:#11182b;white-space:nowrap;font-size:12px">${esc(s.name)}${warn} <span class="badge ${staffLoc(s)==='Сум'?'b-warn':'b-teal'}" style="font-size:9px">${esc(staffLoc(s))}</span></td><td style="position:sticky;left:150px;background:#11182b;text-align:center"><span class="badge b-muted">${esc(s.shift)}</span></td>${tds}</tr>`;}).join('');
   const palette=ROSTER_CODES.map(rc=>`<button class="rpal ${window._rPaint===rc.c?'on':''}" data-c="${rc.c}" onclick="rPickCode('${rc.c}')" style="border:2px solid ${window._rPaint===rc.c?'#fff':'transparent'};background:${rc.tone};color:#0b0f1a;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;margin:2px">${rc.c} ${rc.lbl}</button>`).join('')+`<button class="rpal" data-c="" onclick="rPickCode('')" style="border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12px;margin:2px;cursor:pointer">✕ Арилгах</button>`;
   return `<div class="glass card" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-sm btn-ghost" onclick="setRMonth(-1)">◀</button><b style="font-size:15px">${m}</b><button class="btn btn-sm btn-ghost" onclick="setRMonth(1)">▶</button>
