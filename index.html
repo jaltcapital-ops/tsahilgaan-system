@@ -1135,17 +1135,21 @@ function viewUsers(){return `<div class="glass card" style="margin-bottom:16px">
       <label class="field"><span>Овог нэр *</span><input id="u_name" required placeholder="ж: Бат-Эрдэнэ"></label>
       <label class="field"><span>Нууц үг *</span><input id="u_pw" required value="123456" placeholder="нууц үг"></label>
       <label class="field"><span>Эрх / Албан тушаал</span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
+      <label class="field"><span>📱 Утас</span><input id="u_phone" placeholder="9911...."></label>
+      <label class="field"><span>✉️ Имэйл</span><input id="u_email" type="email" placeholder="name@company.mn"></label>
       <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form>
     <div class="addbar" style="margin-top:10px"><button class="btn btn-sm" onclick="createUsersFromHR()">🧑‍🔧 Хүний нөөцийн бүх ажилтнаар бүртгэл үүсгэх (нууц үг 123456)</button>
       <span class="muted" style="font-size:12px">Албан тушаал тус бүрийн эрхээр автоматаар бүртгэл үүснэ.</span></div>
     <div class="note" style="margin-top:12px">🔑 товчоор нууц үг солино (зөвхөн админ) · ⚙️ товчоор эрх солино · Шинэ бүртгэлийн анхны нууц үг: <b>123456</b>.</div></div>
   <div class="glass card" style="padding:0;overflow:auto"><table id="userTable"><tbody><tr><td class="muted" style="padding:20px">Уншиж байна…</td></tr></tbody></table></div>`;}
 async function loadUsers(){try{const us=await api('/api/users',{headers:authHdr()});
-  document.getElementById('userTable').innerHTML=`<thead><tr><th>Нэвтрэх нэр</th><th>Овог нэр</th><th>Эрх</th><th style="text-align:right">Үйлдэл</th></tr></thead>
+  document.getElementById('userTable').innerHTML=`<thead><tr><th>Нэвтрэх нэр</th><th>Овог нэр</th><th>Эрх</th><th>Утас</th><th>Имэйл</th><th style="text-align:right">Үйлдэл</th></tr></thead>
     <tbody>${us.map(u=>`<tr><td style="font-family:monospace">${esc(u.username)}</td><td>${esc(u.name)}</td>
       <td><span class="badge ${u.role==='ADMIN'?'b-danger':u.role==='VIEWER'?'b-muted':'b-accent'}">${roleLabel(u.role)}</span></td>
+      <td class="muted" style="font-size:12px">${esc(u.phone)||'—'}</td><td class="muted" style="font-size:12px">${esc(u.email)||'—'}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="ic" title="Нууц үг солих" onclick="editUserPw(${u.id},'${esc(u.username)}')">🔑</button>
+        <button class="ic" title="Утас/имэйл засах" onclick="editUserContact(${u.id},'${esc(u.username)}','${esc(u.phone||'')}','${esc(u.email||'')}')">📱</button>
         <button class="ic" title="Эрх солих" onclick="editUserRole(${u.id},'${esc(u.username)}','${u.role}')">⚙️</button>
         ${u.id===ME.id?'<span class="muted" style="font-size:12px;margin-left:4px">(та)</span>':`<button class="del" title="Устгах" onclick="delUser(${u.id},'${esc(u.username)}')">✕</button>`}
       </td></tr>`).join('')}</tbody>`;
@@ -1163,12 +1167,17 @@ async function createUsersFromHR(){if(!ME||ME.role!=='ADMIN'){toast('Зөвхө�
   toast(made+' бүртгэл үүслээ · '+skip+' алгассан · нууц үг 123456');render();}
 async function addUser(e){e.preventDefault();
   try{await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify({
-      username:val('u_username').trim(),name:val('u_name').trim(),password:val('u_pw'),role:val('u_role')})});
+      username:val('u_username').trim(),name:val('u_name').trim(),password:val('u_pw'),role:val('u_role'),phone:val('u_phone').trim(),email:val('u_email').trim()})});
     audit('Хэрэглэгч нэмэв',val('u_username').trim()+' ('+roleLabel(val('u_role'))+')');save();
     toast('Хэрэглэгч нэмэгдлээ ✓');render();}catch(err){toast(err.message);}}
 async function editUserPw(id,name){const pw=prompt('"'+name+'" хэрэглэгчийн ШИНЭ нууц үг оруулна уу:');
   if(!pw||!pw.trim())return;
   try{await api('/api/users/'+id,{method:'PUT',headers:jsonHdr(),body:JSON.stringify({password:pw.trim()})});toast('Нууц үг солигдлоо ✓');}
+  catch(err){toast(err.message);}}
+async function editUserContact(id,name,curPhone,curEmail){
+  const phone=prompt('"'+name+'" — Утасны дугаар:',curPhone||'');if(phone===null)return;
+  const email=prompt('"'+name+'" — Имэйл хаяг:',curEmail||'');if(email===null)return;
+  try{await api('/api/users/'+id,{method:'PUT',headers:jsonHdr(),body:JSON.stringify({phone:phone.trim(),email:email.trim()})});audit('Хэрэглэгчийн холбоо барих',name);save();toast('Хадгалагдлаа ✓');render();}
   catch(err){toast(err.message);}}
 async function editUserRole(id,name,cur){
   const list=ROLES.map((r,i)=>(i+1)+'='+r[1]).join(', ');
@@ -1445,19 +1454,29 @@ function exportAttend(){const m=attMonth();const sum=attMonthSummary(m);
 function woFind(id){return (DB.naryad||[]).find(w=>w.id===id);}
 function woWorked(w){let ms=0;(w.sessions||[]).forEach(s=>{if(s.start&&s.end)ms+=new Date(s.end)-new Date(s.start);});if(w.runningSince)ms+=Date.now()-new Date(w.runningSince);return Math.max(0,Math.round(ms/60000));}
 function staffName(id){const s=(DB.staff||[]).find(x=>x.id===id);return s?s.name:'?';}
+function woEqSearch(v){const q=(v||'').toLowerCase();const el=document.getElementById('wo_eqres');if(!el)return;
+  const list=q?(DB.equip||[]).filter(e=>(e.tag+' '+(e.name||'')).toLowerCase().includes(q)&&!(window._woEquips||[]).includes(e.tag)).slice(0,10):[];
+  el.innerHTML=list.map(e=>`<span class="badge b-accent" style="cursor:pointer;margin:2px" onclick="woEqAdd('${esc(e.tag)}')">+ ${esc(e.tag)} · ${esc(e.name||'')}</span>`).join('');}
+function woEqAdd(tag){if(!window._woEquips)window._woEquips=[];if(!window._woEquips.includes(tag))window._woEquips.push(tag);const s=document.getElementById('wo_eqsearch');if(s)s.value='';const r=document.getElementById('wo_eqres');if(r)r.innerHTML='';woEqRender();}
+function woEqRender(){const el=document.getElementById('wo_eqsel');if(!el)return;el.innerHTML=(window._woEquips||[]).map((t,i)=>`<span class="badge b-teal" style="margin:2px">${esc(t)} <a onclick="window._woEquips.splice(${i},1);woEqRender()" style="cursor:pointer;color:#ff4d4f">✕</a></span>`).join('');}
+function woPdSearch(v){const q=(v||'').toLowerCase();const el=document.getElementById('wo_pdres');if(!el)return;
+  const list=q?(DB.pdList||[]).filter(p=>String(p).toLowerCase().includes(q)&&!(window._woPds||[]).includes(p)).slice(0,10):[];
+  el.innerHTML=list.map(p=>`<span class="badge b-accent" style="cursor:pointer;margin:2px" onclick="woPdAdd('${esc(p)}')">+ ${esc(p)}</span>`).join('');}
+function woPdAdd(pd){if(!window._woPds)window._woPds=[];if(!window._woPds.includes(pd))window._woPds.push(pd);const s=document.getElementById('wo_pdsearch');if(s)s.value='';const r=document.getElementById('wo_pdres');if(r)r.innerHTML='';woPdRender();}
+function woPdRender(){const el=document.getElementById('wo_pdsel');if(!el)return;el.innerHTML=(window._woPds||[]).map((t,i)=>`<span class="badge b-teal" style="margin:2px">${esc(t)} <a onclick="window._woPds.splice(${i},1);woPdRender()" style="cursor:pointer;color:#ff4d4f">✕</a></span>`).join('');}
 function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй');return;}
   if(!DB.naryad)DB.naryad=[];if(!DB.seq.naryad)DB.seq.naryad=0;
   const assignees=Array.from(document.querySelectorAll('.wo_as:checked')).map(c=>+c.value);
   const safety={};SAFE_LABELS.forEach(([k])=>{const el=document.getElementById('saf_'+k);safety[k]=!!(el&&el.checked);});
   DB.naryad.push({id:++DB.seq.naryad,no:'ND'+Date.now().toString().slice(-9),title:val('wo_title').trim(),desc:val('wo_desc').trim(),
-    assignees,area:val('wo_area'),equip:val('wo_equip').trim(),pd:val('wo_pd').trim(),type:val('wo_type'),prio:val('wo_prio'),
+    assignees,area:val('wo_area'),equip:(window._woEquips||[]).join(', '),pd:(window._woPds||[]).join(', '),equips:(window._woEquips||[]).slice(),pds:(window._woPds||[]).slice(),type:val('wo_type'),prio:val('wo_prio'),
     plannedStart:val('wo_pstart'),plannedFinish:val('wo_pfinish'),status:assignees.length?'Assigned':'New',sessions:[],runningSince:null,
     safety,files:[],acceptedBy:'',rejectNote:'',completeNote:'',photos:[],parts:[],createdBy:ME?ME.name:'',createdAt:new Date().toISOString().slice(0,16),actualStart:'',completedAt:'',finishedAt:''});
   const w=DB.naryad[DB.naryad.length-1];const who=(w.assignees||[]).map(staffName);
   who.forEach(nm=>pushNotif(nm,'🧾 Танд шинэ наряд оноогдлоо: '+w.title+' ('+(w.prio||'—')+')','wo'));
   audit('Наряд үүсгэв',w.title);
   notify('🧾 ШИНЭ НАРЯД ('+(w.prio||'—')+')\n'+w.title+(w.equip||w.pd?'\nТоног: '+(w.equip||w.pd):'')+'\nГүйцэтгэгч: '+(who.join(', ')||'—')+(w.plannedFinish?'\nДуусах: '+w.plannedFinish.replace('T',' '):'')+'\nҮүсгэсэн: '+(ME?ME.name:''));
-  save();toast('Наряд үүслээ ✓ — гүйцэтгэгчид мэдэгдэл илгээгдлээ');render();}
+  window._woEquips=[];window._woPds=[];save();toast('Наряд үүслээ ✓ — гүйцэтгэгчид мэдэгдэл илгээгдлээ');render();}
 function isAssignedToMe(w){if(!ME)return false;const me=(DB.staff||[]).filter(s=>s.name===ME.name).map(s=>s.id);return (w.assignees||[]).some(id=>me.includes(id));}
 function canOperateThis(w){return ME&&(canCreateWo()||can('wo_close')||isAssignedToMe(w));}
 function woAccept(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}w.status='Accepted';w.acceptedBy=ME?ME.name:'';w.acceptedAt=new Date().toISOString().slice(0,16);audit('Наряд хүлээж авав',w.no);save();toast('Хүлээж авлаа ✓');render();}
@@ -1561,7 +1580,7 @@ function viewWoSheet(){const w=woFind(window._woSheetId);if(!w)return '<div clas
       </div>
       <div style="text-align:right;margin-top:18px;font-size:11px;color:#777">Хэвлэсэн: ${esc(ME?ME.name:'')} · ${iso(new Date())}</div>
     </div>`;}
-function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();const mgr=canCreateWo();
+function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();window._woEquips=[];window._woPds=[];const o=opsCounts();const mgr=canCreateWo();
   const list=[...DB.naryad].sort((a,b)=>(WO_DONE(a)?1:0)-(WO_DONE(b)?1:0)||(a.createdAt<b.createdAt?1:-1));
   const assignStaff=[...DB.staff].filter(s=>!['ADMIN','CHIEF','AUTO_CHIEF'].includes(s.role));
   const byRole={};assignStaff.forEach(s=>{(byRole[s.role]=byRole[s.role]||[]).push(s);});
@@ -1595,8 +1614,12 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();
         <label class="field"><span>Ажлын төрөл</span><select id="wo_type">${optList(WO_TYPES,'Төлөвлөгөөт')}</select></label>
         <label class="field"><span>Priority</span><select id="wo_prio">${optList(PRIOS,'Дунд')}</select></label>
         <label class="field" style="grid-column:span 3"><span>Тайлбар</span><input id="wo_desc" placeholder="хийх ажлын дэлгэрэнгүй"></label>
-        <label class="field"><span>Тоног / TAG</span><input id="wo_equip" list="equipList" placeholder="MG-101"></label>
-        <label class="field"><span>PD дугаар</span><input id="wo_pd" list="pdList" placeholder="31PD-01"></label>
+        <div class="field" style="grid-column:span 3"><span>Тоног / TAG (хайж олноор сонгоно)</span>
+          <input id="wo_eqsearch" placeholder="TAG/нэр хайх — жагсаалтаас дарж нэмнэ" oninput="woEqSearch(this.value)">
+          <div id="wo_eqres" style="margin-top:4px"></div><div id="wo_eqsel" style="margin-top:4px"></div></div>
+        <div class="field" style="grid-column:span 3"><span>PD дугаар (хайж олноор сонгоно)</span>
+          <input id="wo_pdsearch" placeholder="PD хайх — жагсаалтаас дарж нэмнэ" oninput="woPdSearch(this.value)">
+          <div id="wo_pdres" style="margin-top:4px"></div><div id="wo_pdsel" style="margin-top:4px"></div></div>
         <label class="field"><span>Байршил</span><select id="wo_area"><option value="">—</option>${optList(DB.areas)}</select></label>
         <label class="field"><span>Эхлэх (товлосон)</span><input type="datetime-local" id="wo_pstart"></label>
         <label class="field"><span>Дуусах (товлосон)</span><input type="datetime-local" id="wo_pfinish"></label>

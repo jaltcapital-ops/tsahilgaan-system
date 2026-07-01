@@ -158,7 +158,7 @@ function adminOnly(req, res, next) {
   if (req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Зөвхөн админ' });
   next();
 }
-const publicUser = u => ({ id: u.id, username: u.username, name: u.name, role: u.role });
+const publicUser = u => ({ id: u.id, username: u.username, name: u.name, role: u.role, phone: u.phone || '', email: u.email || '' });
 
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
@@ -187,19 +187,21 @@ app.post('/api/notify', auth, async (req, res) => {
 // Хэрэглэгчийн удирдлага (зөвхөн админ)
 app.get('/api/users', auth, adminOnly, (_req, res) => res.json(DB.users.map(publicUser)));
 app.post('/api/users', auth, adminOnly, (req, res) => {
-  const { username, name, password, role } = req.body || {};
+  const { username, name, password, role, phone, email } = req.body || {};
   if (!username || !name || !password) return res.status(400).json({ error: 'Нэр, нэвтрэх нэр, нууц үг шаардлагатай' });
   if (DB.users.some(u => u.username === username)) return res.status(409).json({ error: 'Энэ нэвтрэх нэр бүртгэлтэй байна' });
-  const u = { id: ++DB.userSeq, username, name, role: role || 'EE', pw: hashPw(password) };
+  const u = { id: ++DB.userSeq, username, name, role: role || 'EE', phone: phone || '', email: email || '', pw: hashPw(password) };
   DB.users.push(u); persist();
   res.status(201).json(publicUser(u));
 });
 app.put('/api/users/:id', auth, adminOnly, (req, res) => {
   const u = DB.users.find(x => x.id === +req.params.id);
   if (!u) return res.status(404).json({ error: 'Олдсонгүй' });
-  const { name, role, password } = req.body || {};
+  const { name, role, password, phone, email } = req.body || {};
   if (name) u.name = name;
   if (role) u.role = role;
+  if (phone !== undefined) u.phone = phone;
+  if (email !== undefined) u.email = email;
   if (password) u.pw = hashPw(password);
   persist(); res.json(publicUser(u));
 });
