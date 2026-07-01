@@ -965,13 +965,19 @@ function viewQR(){if(typeof qrcode==='undefined')return '<div class="note">QR с
     <span class="muted" style="font-size:12px" id="qrCount">${items.length} ширхэг${items.length>300?' (эхний 300 — хайлтаар нарийсга)':''}</span>
     <button class="btn btn-sm" style="margin-left:auto" onclick="window.print()">🖨 Хэвлэх / PDF хадгалах</button></div>
   <div class="note" style="margin-bottom:12px">QR кодууд доор шууд харагдана. "🖨 Хэвлэх" дарж наалт цаасан дээр хэвлэх эсвэл PDF болгож хадгална. Уншуулахад ${mode==='pd'?'тухайн PD дугаарын':'тухайн тоноглолын'} хуудас нээгдэнэ.</div>
-  <div id="qrprint" class="glass card"><div class="qrgrid">${shown.map(it=>`<div class="qrcell"><img src="${qrDataUrl(it.url,4)}"><div class="t">${esc(it.tag)}</div><div class="n">${esc(it.name)}</div></div>`).join('')||'<div class="muted" style="padding:20px">Алга байна — тоног/PD нэмнэ үү.</div>'}</div></div>`;}
-function qrSearchUpdate(v){window._qrSearch=v;const mode=window._qrMode||'equip';const q=(v||'').toLowerCase();let items;
-  if(mode==='pd')items=(DB.pdList||[]).filter(p=>!q||p.toLowerCase().includes(q)).map(p=>({tag:p,name:'PD дугаар',url:location.origin+'/?pd='+encodeURIComponent(p)}));
-  else items=(DB.equip||[]).filter(e=>!q||(e.tag+' '+(e.name||'')).toLowerCase().includes(q)).map(e=>({tag:e.tag,name:e.name||'',url:qrUrl(e.tag)}));
-  const shown=items.slice(0,300);const g=document.querySelector('#qrprint .qrgrid');
-  if(g)g.innerHTML=shown.map(it=>`<div class="qrcell"><img src="${qrDataUrl(it.url,4)}"><div class="t">${esc(it.tag)}</div><div class="n">${esc(it.name)}</div></div>`).join('')||'<div class="muted" style="padding:20px">Алга байна.</div>';
-  const c=document.getElementById('qrCount');if(c)c.textContent=items.length+' ширхэг'+(items.length>300?' (эхний 300)':'');}
+  <div id="qrprint" class="glass card">${qrGridHTML(mode,q).html}</div>`;}
+function qrGroups(mode,q){q=(q||'').toLowerCase();
+  if(mode==='pd'){const arr=(DB.pdList||[]).filter(p=>!q||p.toLowerCase().includes(q)).map(p=>({tag:p,name:'PD дугаар',url:location.origin+'/?pd='+encodeURIComponent(p)}));return [['PD дугаарууд',arr]];}
+  const eqs=(DB.equip||[]).filter(e=>!q||(e.tag+' '+(e.name||'')+' '+(e.area||'')+' '+(e.pd||'')).toLowerCase().includes(q));
+  const g={};eqs.forEach(e=>{const key=e.area||e.pd||'Ангилалгүй';(g[key]=g[key]||[]).push({tag:e.tag,name:e.name||'',url:qrUrl(e.tag)});});
+  return Object.keys(g).sort().map(k=>[k,g[k]]);}
+function qrGridHTML(mode,q){const groups=qrGroups(mode,q);let total=0,html='';
+  groups.forEach(([name,arr])=>{if(!arr.length)return;total+=arr.length;
+    html+='<div style="font-weight:700;margin:12px 0 6px" class="t-accent">📂 '+esc(name)+' <span class="muted" style="font-weight:400;font-size:12px">('+arr.length+')</span></div><div class="qrgrid">'+arr.slice(0,400).map(it=>`<div class="qrcell"><img src="${qrDataUrl(it.url,4)}"><div class="t">${esc(it.tag)}</div><div class="n">${esc(it.name)}</div></div>`).join('')+'</div>';});
+  return {html:html||'<div class="muted" style="padding:20px">Алга байна — тоног/PD нэмнэ үү.</div>',total};}
+function qrSearchUpdate(v){window._qrSearch=v;const mode=window._qrMode||'equip';const q=(v||'').toLowerCase();
+  const g=qrGridHTML(mode,q);const el=document.getElementById('qrprint');if(el)el.innerHTML=g.html;
+  const c=document.getElementById('qrCount');if(c)c.textContent=g.total+' ширхэг';}
 function openPdPassport(pd){window._pdTag=pd;go('pdpass');}
 function prefillNewPd(pd){go('new');setTimeout(function(){const el=document.getElementById('w_pd');if(el)el.value=pd;},60);}
 function showPdQR(pd){if(typeof qrcode==='undefined'){toast('QR сан алга');return;}
@@ -997,31 +1003,48 @@ function viewPdPassport(){const pd=window._pdTag;
     <div style="overflow:auto"><table><thead><tr><th>Огноо</th><th>TAG</th><th>Тайлбар</th><th>Төлөв</th></tr></thead>
     <tbody>${works.slice(0,30).map(w=>`<tr><td>${w.date}</td><td>${esc(w.equip)}</td><td style="max-width:280px">${esc(w.desc)}</td>
       <td>${w.fault?`<span class="badge ${faultBadge(faultState(w))}">${esc(faultState(w))}</span>`:`<span class="badge ${badgeFor(w.status)}">${esc(w.status)}</span>`}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Бүртгэл алга.</td></tr>'}</tbody></table></div></div>`;}
-function quickCheckForm(target,kind){window._newPhotos=[];return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">✅ Шуурхай үзлэг (QR)</div>
-    <form onsubmit="saveQuickCheck(event,'${esc(target)}','${kind}')"><div class="col3">
+function quickCheckForm(target,kind){window._newPhotos=[];const eq=kind==='equip';return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">✅ Ажиллагааны үзлэг (QR)</div>
+    <form onsubmit="saveQuickCheck(event,'${esc(target)}','${kind}')">
+    ${eq?`<div class="col3">
+      <label class="field"><span>🌡️ Халалт — Ажлын тал °C</span><input id="qc_t1" type="number" step="0.1" placeholder="°C"></label>
+      <label class="field"><span>🌡️ Халалт — Статор °C</span><input id="qc_t2" type="number" step="0.1" placeholder="°C"></label>
+      <label class="field"><span>🌡️ Халалт — Ажлын бус тал °C</span><input id="qc_t3" type="number" step="0.1" placeholder="°C"></label>
+      <label class="field"><span>📳 Доргио / чичиргээ</span><select id="qc_vib"><option>Хэвийн</option><option>Их</option><option>Анхаарах</option></select></label>
+      <label class="field"><span>🔊 Дуу чимээ</span><select id="qc_noise"><option>Хэвийн</option><option>Их</option><option>Анхаарах</option></select></label>
+      <div></div></div>`:''}
+    <div class="col3" style="${eq?'margin-top:8px':''}">
       <label class="field"><span>Хэвийн эсэх?</span><select id="qc_normal"><option value="✅">✅ Хэвийн</option><option value="❌">❌ Хэвийн бус</option></select></label>
-      <label class="field"><span>Гэмтэл илэрсэн үү?</span><select id="qc_fault" onchange="document.getElementById('qc_dw').style.display=this.value==='Тийм'?'block':'none';document.getElementById('qc_pw').style.display=this.value==='Тийм'?'block':'none'"><option>Үгүй</option><option>Тийм</option></select></label>
+      <label class="field"><span>Гэмтэл илэрсэн үү?</span><select id="qc_fault" onchange="document.getElementById('qc_dw').style.display=this.value==='Тийм'?'block':'none'"><option>Үгүй</option><option>Тийм</option></select></label>
       <label class="field" id="qc_dw" style="display:none"><span>Гэмтлийн тайлбар</span><input id="qc_fdesc" placeholder="юу эвдэрсэн бэ"></label>
-    </div><label class="field" style="margin-top:10px"><span>Тайлбар (1 мөр)</span><input id="qc_note"></label>
-    <div class="field" id="qc_pw" style="display:none;margin-top:10px"><span>📷 Гэмтлийн зураг хавсаргах</span><input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></div>
-    <div style="margin-top:12px"><button class="btn">Хадгалах</button>
-      <span class="muted" style="font-size:12px;margin-left:10px">Гэмтэлтэй бол автоматаар "Цахилгааны гэмтэл"-д бүртгэгдэж, Telegram-д мэдэгдэнэ.</span></div></form></div>`;}
+    </div>
+    <label class="field" style="margin-top:10px"><span>Тайлбар</span><input id="qc_note"></label>
+    <div class="field" style="margin-top:10px"><span>📷 Зураг хавсаргах</span><input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></div>
+    <div style="margin-top:12px"><button class="btn">Үзлэг хадгалах</button>
+      <span class="muted" style="font-size:12px;margin-left:10px">Гэмтэлтэй бол "Цахилгааны гэмтэл"-д бүртгэгдэж, Telegram-д мэдэгдэнэ.</span></div></form></div>`;}
 async function saveQuickCheck(e,target,kind){e.preventDefault();
-  const normal=val('qc_normal'),fault=val('qc_fault'),fdesc=val('qc_fdesc'),note=val('qc_note');
+  const normal=val('qc_normal'),fault=val('qc_fault'),fdesc=val('qc_fdesc'),note=val('qc_note');const eq=kind==='equip';
+  const results=[{item:'Хэвийн байдал',status:normal==='✅'?'OK':'Анхаарах',note:''}];
+  if(eq){const t1=val('qc_t1'),t2=val('qc_t2'),t3=val('qc_t3'),vib=val('qc_vib'),noise=val('qc_noise');
+    if(t1||t2||t3)results.push({item:'Халалт °C (ажлын/статор/бус)',status:'OK',note:(t1||'—')+' / '+(t2||'—')+' / '+(t3||'—')});
+    results.push({item:'Доргио чичиргээ',status:vib==='Хэвийн'?'OK':'Анхаарах',note:vib});
+    results.push({item:'Дуу чимээ',status:noise==='Хэвийн'?'OK':'Анхаарах',note:noise});}
   if(!DB.inspections)DB.inspections=[];if(!DB.seq.inspection)DB.seq.inspection=0;if(!DB.seq.wo)DB.seq.wo=0;
-  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',
-    results:[{item:'Хэвийн байдал',status:normal==='✅'?'OK':'Анхаарах',note:''}],overall:(normal==='❌'||fault==='Тийм')?'Анхаарах':'OK',note:note});
+  const overall=(normal==='❌'||fault==='Тийм'||results.some(r=>r.status==='Анхаарах'))?'Анхаарах':'OK';
+  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',results,overall,note,photos:(window._newPhotos||[]).slice()});
+  audit('QR үзлэг хийв',target+' · '+overall);
   if(fault==='Тийм'){const now=new Date().toISOString().slice(0,16);
-    const eqp=kind==='equip'?target:'';const pdv=kind==='pd'?target:((DB.equip.find(x=>x.tag===target)||{}).pd||'');
+    const eqp=eq?target:'';const pdv=kind==='pd'?target:((DB.equip.find(x=>x.tag===target)||{}).pd||'');
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:null,date:iso(new Date()),
       equip:eqp||target,pd:pdv,area:'',type:'Шуурхай дуудлага',prio:'Өндөр',status:'Нээлттэй',
       desc:fdesc||note||((kind==='pd'?'PD ':'')+target+' дээр гэмтэл илэрсэн'),fault:true,fstate:'Эвдрэлтэй',
       root:'',action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()});
     window._newPhotos=[];await saveNow();
-    notify('⚡ ГЭМТЭЛ илэрлээ (QR шуурхай үзлэг)\n'+(kind==='pd'?'PD: ':'Тоног: ')+target+'\nТайлбар: '+(fdesc||note||'—')+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
-    audit('QR гэмтэл бүртгэв',(kind==='pd'?'PD ':'')+target);pushNotif('*','⚡ Гэмтэл илэрлээ: '+(kind==='pd'?'PD ':'')+target);notifyBrowser('⚡ Гэмтэл илэрлээ',target);
-    toast('Гэмтэл бүртгэгдлээ ✓ — "Цахилгааны гэмтэл" болон даш дээр харагдана');go('faults');return;}
-  await saveNow();toast('Үзлэг хадгалагдлаа ✓ ('+(normal==='✅'?'Хэвийн':'Анхаарах')+')');render();}
+    notify('⚡ ГЭМТЭЛ илэрлээ (QR үзлэг)\n'+(kind==='pd'?'PD: ':'Тоног: ')+target+'\nТайлбар: '+(fdesc||note||'—')+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
+    pushNotif('*','⚡ Гэмтэл илэрлээ: '+(kind==='pd'?'PD ':'')+target);notifyBrowser('⚡ Гэмтэл илэрлээ',target);
+    toast('Гэмтэл бүртгэгдлээ ✓');go('faults');return;}
+  window._newPhotos=[];await saveNow();
+  if(overall==='Анхаарах')notify('✅ ҮЗЛЭГ: Анхаарах илэрлээ\nТоног: '+target+'\n'+results.filter(r=>r.status==='Анхаарах').map(r=>r.item+(r.note?' ('+r.note+')':'')).join(', ')+'\n'+(ME?ME.name:''));
+  toast('Үзлэг хадгалагдлаа ✓ ('+overall+')');render();}
 function compressImg(file,cb){const r=new FileReader();r.onload=ev=>{const img=new Image();img.onload=()=>{const max=900;let w=img.width,h=img.height;
     if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
     const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL('image/jpeg',0.55));};img.src=ev.target.result;};r.readAsDataURL(file);}
@@ -1559,7 +1582,12 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();const o=opsCounts();
       <td style="text-align:center;font-weight:700" class="t-teal">${woWorked(w)}<div style="font-size:10px;font-weight:400" class="muted">мин</div></td>
       <td><span class="badge ${wo2Badge[w.status]||'b-muted'}">${esc(wo2Label[w.status]||w.status)}</span></td>
       <td style="white-space:nowrap">${woControls(w)} ${canDelete()?delBtn('delWO('+w.id+')'):''}</td></tr>`;}).join('');
-  return `<div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:12px">
+  return `<div class="glass card" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <b style="font-size:14px">🧾 Наряд / Work Order</b>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="go('inspect')">✅ Үзлэг хийх</button>
+        <button class="btn btn-sm btn-ghost" onclick="go('qr')">🔲 QR кодууд</button></div></div>
+    <div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:12px">
       ${kpiCard('Өдөр ажиллаж буй',o.dayW,'ok')}${kpiCard('Шөнийн ээлж',o.nightW,'accent')}${kpiCard('Амралттай',o.off,'muted')}
       ${kpiCard('Өвчтэй',o.sick,'danger')}${kpiCard('Чөлөөтэй',o.leave,'warn')}${kpiCard('Дуудлагаар',o.callout,'teal')}</div>
     <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
@@ -1776,7 +1804,9 @@ function dailyReport(d){const inDay=ts=>ts&&String(ts).slice(0,10)===d;
   const lotoGrp=(DB.loto||[]).filter(x=>inDay(x.appliedAt)&&x.type==='Групп').length;
   const pm=(DB.wos||[]).filter(w=>isPlanned(w.type)&&isClosed(w.status)&&w.date===d).length;
   const works=(DB.wos||[]).filter(w=>w.date===d).length;
-  return {woClosed,faultsFixed,insp,lotoApplied,lotoStd,lotoGrp,pm,works};}
+  const inspTags=new Set((DB.inspections||[]).filter(i=>i.date===d).map(i=>i.equip));
+  const notInsp=Math.max(0,(DB.equip||[]).length-inspTags.size);
+  return {woClosed,faultsFixed,insp,lotoApplied,lotoStd,lotoGrp,pm,works,inspDone:inspTags.size,notInsp};}
 function viewDaily(){const d=window._dailyDate||iso(new Date());const r=dailyReport(d);
   return `<div class="glass card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <div class="section-title" style="margin:0">📅 Өдөр тутмын ажлын тайлан <span class="badge b-ok" style="margin-left:6px">Авто үүсдэг</span></div>
@@ -1785,18 +1815,18 @@ function viewDaily(){const d=window._dailyDate||iso(new Date());const r=dailyRep
     <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
       ${kpiCard('Хаагдсан Work Order',r.woClosed,'ok')}${kpiCard('Засварласан гэмтэл',r.faultsFixed,'danger')}${kpiCard('Тоног үзлэг',r.insp,'accent')}${kpiCard('PM ажил',r.pm,'teal')}</div>
     <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
-      ${kpiCard('LOTO стандарт',r.lotoStd,'warn')}${kpiCard('LOTO групп',r.lotoGrp,'warn')}${kpiCard('Нийт LOTO',r.lotoApplied,'muted')}${kpiCard('Нийт ажил/бичлэг',r.works,'muted')}</div>
+      ${kpiCard('LOTO стандарт',r.lotoStd,'warn')}${kpiCard('LOTO групп',r.lotoGrp,'warn')}${kpiCard('Үзлэг хийгдсэн',r.inspDone,'ok','тоног')}${kpiCard('Үзлэг хийгдээгүй',r.notInsp,'danger','үлдсэн тоног')}</div>
     <div class="glass card" id="rptArea"><div class="section-title">📝 Тайлангийн товч (${d})</div>
       <ul style="line-height:2.1;font-size:14px;margin:8px 0">
         <li>Өнөөдөр нийт <b>${r.woClosed}</b> Work Order хаагдсан.</li>
         <li><b>${r.faultsFixed}</b> цахилгааны гэмтэл бүрэн засварлагдсан.</li>
-        <li><b>${r.insp}</b> тоног төхөөрөмжид үзлэг хийсэн.</li>
+        <li><b>${r.inspDone}</b> тоног төхөөрөмжид үзлэг хийсэн, <b class="t-danger">${r.notInsp}</b> тоног үзлэг хийгдээгүй.</li>
         <li><b>${r.lotoStd}</b> стандарт LOTO, <b>${r.lotoGrp}</b> групп LOTO хийгдсэн.</li>
         <li><b>${r.pm}</b> PM (төлөвлөгөөт) ажил төлөвлөгөөний дагуу биелсэн.</li>
       </ul></div>`;}
 function dailySummaryPanel(){const d=iso(new Date());const r=dailyReport(d);
   return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">📅 Өнөөдрийн ажлын товч (авто) <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="go('daily')">Дэлгэрэнгүй →</button></div>
-    <div style="font-size:14px;line-height:2">Хаагдсан WO: <b class="t-ok">${r.woClosed}</b> · Засварласан гэмтэл: <b class="t-danger">${r.faultsFixed}</b> · Үзлэг: <b class="t-accent">${r.insp}</b> · LOTO: <b>${r.lotoStd}</b> станд / <b>${r.lotoGrp}</b> групп · PM: <b class="t-teal">${r.pm}</b></div></div>`;}
+    <div style="font-size:14px;line-height:2">Хаагдсан WO: <b class="t-ok">${r.woClosed}</b> · Засварласан гэмтэл: <b class="t-danger">${r.faultsFixed}</b> · Үзлэг: <b class="t-accent">${r.inspDone}</b> хийсэн / <b class="t-danger">${r.notInsp}</b> үлдсэн · LOTO: <b>${r.lotoStd}</b> станд / <b>${r.lotoGrp}</b> групп · PM: <b class="t-teal">${r.pm}</b></div></div>`;}
 /* ---- Шинэ мэдээ (онцлох мэдээллийн самбар) ---- */
 const canPostNews=()=>ME&&['ADMIN','CHIEF','AUTO_CHIEF'].includes(ME.role);
 const NEWS_CAT=['Онцлох ажил','Аюулгүй ажиллагаа','Шинэ тоног','Сургалт','Шагнал/Урамшуулал','Их засвар','Шуурхай мэдээ'];
