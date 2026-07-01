@@ -1469,7 +1469,7 @@ function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй')
   const assignees=Array.from(document.querySelectorAll('.wo_as:checked')).map(c=>+c.value);
   const safety={};SAFE_LABELS.forEach(([k])=>{const el=document.getElementById('saf_'+k);safety[k]=!!(el&&el.checked);});
   DB.naryad.push({id:++DB.seq.naryad,no:'ND'+Date.now().toString().slice(-9),title:val('wo_title').trim(),desc:val('wo_desc').trim(),
-    assignees,area:val('wo_area'),equip:(window._woEquips||[]).join(', '),pd:(window._woPds||[]).join(', '),equips:(window._woEquips||[]).slice(),pds:(window._woPds||[]).slice(),type:val('wo_type'),prio:val('wo_prio'),
+    assignees,assigneeNames:assignees.map(staffName),area:val('wo_area'),equip:(window._woEquips||[]).join(', '),pd:(window._woPds||[]).join(', '),equips:(window._woEquips||[]).slice(),pds:(window._woPds||[]).slice(),type:val('wo_type'),prio:val('wo_prio'),
     plannedStart:val('wo_pstart'),plannedFinish:val('wo_pfinish'),status:assignees.length?'Assigned':'New',sessions:[],runningSince:null,
     safety,files:[],acceptedBy:'',rejectNote:'',completeNote:'',photos:[],parts:[],createdBy:ME?ME.name:'',createdAt:new Date().toISOString().slice(0,16),actualStart:'',completedAt:'',finishedAt:''});
   const w=DB.naryad[DB.naryad.length-1];const who=(w.assignees||[]).map(staffName);const link=location.origin+'/?wo='+w.id;
@@ -1477,7 +1477,10 @@ function createWO(e){e.preventDefault();if(!canCreateWo()){toast('Эрхгүй')
   audit('Наряд үүсгэв',w.title);
   notify('🧾 ШИНЭ НАРЯД ('+(w.prio||'—')+')\n'+w.title+(w.equip||w.pd?'\nТоног: '+(w.equip||w.pd):'')+'\nГүйцэтгэгч: '+(who.join(', ')||'—')+(w.plannedFinish?'\nДуусах: '+w.plannedFinish.replace('T',' '):'')+'\nҮүсгэсэн: '+(ME?ME.name:'')+'\n🔗 Нээх: '+link);
   window._woEquips=[];window._woPds=[];save();toast('Наряд үүслээ ✓ — гүйцэтгэгчид мэдэгдэл илгээгдлээ');render();}
-function isAssignedToMe(w){if(!ME)return false;const me=(DB.staff||[]).filter(s=>s.name===ME.name).map(s=>s.id);return (w.assignees||[]).some(id=>me.includes(id));}
+function normName(s){return (s||'').trim().toLowerCase().replace(/\s+/g,' ');}
+function nameTokens(s){return normName(s).split(/\s+/).filter(x=>x.length>2);}
+function namesMatch(a,b){if(!a||!b)return false;if(normName(a)===normName(b))return true;const tb=new Set(nameTokens(b));return nameTokens(a).some(t=>tb.has(t));}
+function isAssignedToMe(w){if(!ME)return false;const names=(w.assigneeNames&&w.assigneeNames.length)?w.assigneeNames:(w.assignees||[]).map(staffName);return names.some(nm=>namesMatch(ME.name,nm));}
 function canOperateThis(w){return ME&&isAssignedToMe(w);}
 function woAccept(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}w.status='Accepted';w.acceptedBy=ME?ME.name:'';w.acceptedAt=new Date().toISOString().slice(0,16);audit('Наряд хүлээж авав',w.no);save();toast('Хүлээж авлаа ✓');render();}
 function woStart(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}if(!w.sessions)w.sessions=[];w.runningSince=new Date().toISOString().slice(0,16);w.status='In Progress';if(!w.actualStart)w.actualStart=w.runningSince;save();toast('Ажил эхэллээ ▶');render();}
