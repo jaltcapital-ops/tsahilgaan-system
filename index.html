@@ -1265,9 +1265,7 @@ function confirmInsWO(tag){const ids=Array.from(document.querySelectorAll('.ins_
   save();toast('Үзлэгийн наряд '+names.length+' хүнд илгээгдлээ ✓');render();}
 // Тухайн тоногт үзлэг хийгдмэгц нээлттэй үзлэгийн WO-г Completed болгоно
 function completeInsWO(tag){const w=openInsWO(tag);if(!w)return null;w.status='Completed';w.completedAt=new Date().toISOString().slice(0,16);w.finishedAt=w.completedAt;w.completeNote='Үзлэг баталгаажлаа (QR/Tag)';audit('Үзлэгийн WO дуусгав',w.no);return w;}
-function setInsFreq(tag){const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)return;
-  const f=prompt('"'+tag+'" — Үзлэгийн давтамж (хоног, 0=цуцлах):',e.insFreq||'');if(f===null)return;
-  e.insFreq=Math.max(0,parseInt(f,10)||0);if(!e.insStart)e.insStart=iso(new Date());save();toast('Давтамж хадгалагдлаа ✓');render();}
+function setInsFreq(tag){openInsCfg(tag);}   // хуучин дуудлагыг modal руу чиглүүлэв (prompt ашиглахгүй)
 // Poll дээр — хугацаа болсон тоногт нэг удаа сануулга
 async function checkInspections(){if(!ME||!['ADMIN','MASTER'].includes(ME.role))return;let ch=false;
   const masters=(DB.staff||[]).filter(s=>s.role==='MASTER').map(s=>s.name);   // зөвхөн цахилгааны мастер(ууд)-т
