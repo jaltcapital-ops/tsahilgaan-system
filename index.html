@@ -249,6 +249,18 @@ const delBtn=(fn)=>canDelete()?`<button class="del" onclick="${fn}" title="Ус�
 
 /* ============ Туслах ============ */
 function downtimeOf(w){if(w.down!=null)return w.down;if(w.start&&w.finish){let m=(new Date(w.finish)-new Date(w.start))/60000;return m>0?Math.round(m):0;}return 0;}
+// Минутыг хоног/цаг/мин болгон хүн уншихаар харуулна
+function fmtDur(min){min=Math.max(0,Math.round(min||0));if(!min)return '0 мин';const d=Math.floor(min/1440),h=Math.floor((min%1440)/60),m=min%60;const p=[];if(d)p.push(d+' хоног');if(h)p.push(h+' цаг');if(m)p.push(m+' мин');return p.join(' ');}
+function downFmt(w){return fmtDur(downtimeOf(w));}
+// Гэмтэл засварласан үед — зогсолтын хугацааг цаг/хоногоор оруулж, финиш цаг+downtime авто тооцоолно
+function repairFault(w){const startMs=w.start?new Date(w.start).getTime():null;
+  const defH=startMs?Math.max(0,(Date.now()-startMs)/3600000).toFixed(1):'';
+  const ans=prompt('⚡ Гэмтэл засрах хүртэл нийт хэдэн ЦАГ зарцуулсан бэ?\n(бутархайгаар болно: 1.5 = 1ц 30м · хоногийг ×24, ж: 2 хоног = 48 · 3 хоног = 72)\n\nЭхэлсэн: '+((w.start||'').replace('T',' ')||'—'),defH);
+  if(ans===null)return false;const h=parseFloat(String(ans).replace(',','.'));
+  if(isNaN(h)||h<0){toast('Хугацаа буруу');return false;}
+  w.down=Math.round(h*60);
+  w.finish=startMs?new Date(startMs+w.down*60000).toISOString().slice(0,16):new Date().toISOString().slice(0,16);
+  return true;}
 function inRange(date){return date>=RANGE.from&&date<=RANGE.to;}
 const isPlanned=t=>['Төлөвлөгөөт','PM'].includes(t);
 const isUnplanned=t=>['Төлөвлөгөөт бус','CM','Шуурхай дуудлага'].includes(t);
@@ -526,9 +538,9 @@ function viewNew(){window._newPhotos=[];return `${dataListEquip()}${dataListPd()
       <label class="field"><span>Статус *</span><select id="w_status" required><option value="">—</option>${optList(STATUSES)}</select></label>
       <label class="field"><span>Хариуцагч инженер</span><select id="w_eng"><option value="">—</option>${optList(DB.engineers)}</select></label>
       <label class="field" style="grid-column:span 3"><span>Ажлын тайлбар *</span><textarea id="w_desc" rows="2" required></textarea></label>
-      <label class="field"><span>Эвдрэл эсэх</span><div><label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="w_fault" style="width:auto" onchange="document.getElementById('faultBox').classList.toggle('hidden',!this.checked)"> Тийм, энэ нь эвдрэл</label></div></label>
-      <label class="field"><span>Start time</span><input type="datetime-local" id="w_start" onchange="calcDown()"></label>
-      <label class="field"><span>Finish time</span><input type="datetime-local" id="w_finish" onchange="calcDown()"></label>
+      <label class="field"><span>Эвдрэл эсэх</span><div><label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="w_fault" style="width:auto" onchange="faultToggle(this)"> Тийм, энэ нь эвдрэл</label></div></label>
+      <label class="field"><span id="startLbl">Start time (эхэлсэн)</span><input type="datetime-local" id="w_start" onchange="calcDown()"></label>
+      <label class="field" id="finishWrap"><span>Finish time (дуссан)</span><input type="datetime-local" id="w_finish" onchange="calcDown()"></label>
       <div id="faultBox" class="hidden row2" style="grid-column:span 3">
         <label class="field"><span>Root Cause</span><input id="w_root"></label>
         <label class="field"><span>Action Taken</span><input id="w_action"></label></div>
@@ -539,8 +551,15 @@ function viewNew(){window._newPhotos=[];return `${dataListEquip()}${dataListPd()
     <div class="note" style="margin-top:12px">Авто тооцоо: Downtime = <b id="downPrev">— (Start/Finish оруулна уу)</b> · Эгзэгтэй/Өндөр гэмтэл бол Telegram мэдэгдэл илгээнэ.</div>
   </div>
   <button class="btn">Хадгалах</button></form>`;}
-function calcDown(){const s=val('w_start'),f=val('w_finish');let txt='— (Start/Finish оруулна уу)';
-  if(s&&f){let m=Math.max(0,Math.round((new Date(f)-new Date(s))/60000));txt=m+' мин';}document.getElementById('downPrev').textContent=txt;}
+function faultToggle(cb){document.getElementById('faultBox').classList.toggle('hidden',!cb.checked);
+  // Гэмтэл бол финиш цагийг нуух (засварласан үед оруулна), старт цагийг одоо болгож бөглөх
+  const fw=document.getElementById('finishWrap');if(fw)fw.classList.toggle('hidden',cb.checked);
+  const sl=document.getElementById('startLbl');if(sl)sl.textContent=cb.checked?'⚡ Гэмтэл эхэлсэн цаг (старт) *':'Start time (эхэлсэн)';
+  const ws=document.getElementById('w_start');if(cb.checked&&ws&&!ws.value)ws.value=new Date().toISOString().slice(0,16);
+  calcDown();}
+function calcDown(){const s=val('w_start'),f=val('w_finish');const isF=document.getElementById('w_fault')?.checked;let txt='— (Start/Finish оруулна уу)';
+  if(isF&&!f){txt='Засварласан үед хугацаа авто тооцоологдоно';}
+  else if(s&&f){let m=Math.max(0,Math.round((new Date(f)-new Date(s))/60000));txt=fmtDur(m);}document.getElementById('downPrev').textContent=txt;}
 function val(id){return document.getElementById(id).value;}
 function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
   const no='DR-'+val('f_date').replaceAll('-','')+'-'+val('f_shift')+'-'+(val('f_dn')==='Өдөр'?'D':'N');
@@ -620,7 +639,7 @@ function viewWork(){const doneWO=(DB.naryad||[]).filter(WO_DONE).sort((a,b)=>((a
     <tbody>${doneWO.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:11px">${esc(w.no)}</td>
       <td style="max-width:240px"><b>${esc(w.title)||'—'}</b>${w.completeNote?'<div class="t-ok" style="font-size:11px">✓ '+esc(w.completeNote)+'</div>':''}</td>
       <td style="font-size:12px">${esc((w.assignees||[]).map(staffName).join(', '))||'—'}</td>
-      <td style="text-align:center">${woWorked(w)} мин</td><td class="muted" style="font-size:12px">${esc((w.finishedAt||w.completedAt||'').replace('T',' '))||'—'}</td>
+      <td style="text-align:center">${fmtDur(woWorked(w))}</td><td class="muted" style="font-size:12px">${esc((w.finishedAt||w.completedAt||'').replace('T',' '))||'—'}</td>
       <td><span class="badge ${wo2Badge[w.status]||'b-ok'}">${esc(wo2Label[w.status]||w.status)}</span></td>
       <td><button class="btn btn-sm btn-ghost" onclick="openWoSheet(${w.id})">🖨️</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Хаагдсан наряд алга.</td></tr>'}</tbody></table></div>`;}
 function currentWorkRows(){const q=(document.getElementById('q')?.value||'').toLowerCase();
@@ -636,32 +655,30 @@ function woStatusCell(w){
 function refreshAfterWo(){if(document.getElementById('wtable'))renderWorkTable();else render();}
 function setWoStatus(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;w.status=val;save();toast('Статус шинэчлэгдлээ ✓');refreshAfterWo();}
 function setWoFaultState(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;
-  if(val==='Засварласан'&&!confirm('Энэ гэмтлийг ЗАСВАРЛАСАН гэж баталгаажуулах уу?\nИдэвхтэй гэмтлээс хасагдаж, Ажлын түүх рүү шилжинэ.')){refreshAfterWo();return;}
-  w.fstate=val;
   if(val==='Засварласан'){
-    if(!w.finish)w.finish=new Date().toISOString().slice(0,16);            // цаг авто зогсоох
-    if(w.start&&w.finish)w.down=Math.max(0,Math.round((new Date(w.finish)-new Date(w.start))/60000)); // зогсолт авто тооцох
-    w.status='Дууссан';
-  }else if(val==='Засварлаж байгаа'){w.status='Хийгдэж буй';}
-  else{w.status='Нээлттэй';}
-  audit('Гэмтлийн төлөв өөрчлөв',(w.equip||w.pd||'')+' → '+val);save();toast('Гэмтлийн төлөв: '+val+(val==='Засварласан'?' · зогсолт '+(w.down||0)+' мин':''));refreshAfterWo();}
+    if(!repairFault(w)){refreshAfterWo();return;}   // зогсолтын хугацаа оруулж, финиш+downtime авто тооцоо
+    w.fstate=val;w.status='Дууссан';
+  }else if(val==='Засварлаж байгаа'){w.fstate=val;w.status='Хийгдэж буй';}
+  else{w.fstate=val;w.status='Нээлттэй';}
+  audit('Гэмтлийн төлөв өөрчлөв',(w.equip||w.pd||'')+' → '+val);save();toast('Гэмтлийн төлөв: '+val+(val==='Засварласан'?' · зогсолт '+fmtDur(w.down)+' → Ажлын түүхэд шилжлээ ✓':''));refreshAfterWo();}
 function workCell(w){const tag=w.fault?'<span class="badge b-danger" style="font-size:10px;margin-left:4px">⚡гэмтэл</span>':'';
   if(canEditWoStatus())return `<select onchange="setWoStatus2(${w.id},this.value)" style="padding:4px 6px;font-size:12px;width:auto">${STATUSES.map(s=>`<option ${s===(w.status||'Нээлттэй')?'selected':''}>${esc(s)}</option>`).join('')}</select>${tag}`;
   return `<span class="badge ${badgeFor(w.status)}">${esc(w.status||'Нээлттэй')}</span>${tag}`;}
 function setWoStatus2(id,val){const w=DB.wos.find(x=>x.id===id);if(!w)return;
   if(val==='Дууссан'&&!confirm('Энэ ажлыг ДУУССАН гэж баталгаажуулах уу?')){refreshAfterWo();return;}
   if(val==='Цуцлагдсан'&&!confirm('Энэ ажлыг ЦУЦЛАХ уу?')){refreshAfterWo();return;}
+  if(w.fault&&val==='Дууссан'){if(!repairFault(w)){refreshAfterWo();return;}}
   w.status=val;
-  if(w.fault){w.fstate=val==='Дууссан'?'Засварласан':(val==='Хийгдэж буй'?'Засварлаж байгаа':'Эвдрэлтэй');
-    if(val==='Дууссан'){if(!w.finish)w.finish=new Date().toISOString().slice(0,16);if(w.start&&w.finish)w.down=Math.max(0,Math.round((new Date(w.finish)-new Date(w.start))/60000));}}
-  audit('Ажлын статус',(w.equip||w.pd||w.no)+' → '+val);save();toast('Статус: '+val);refreshAfterWo();}
+  if(w.fault){w.fstate=val==='Дууссан'?'Засварласан':(val==='Хийгдэж буй'?'Засварлаж байгаа':'Эвдрэлтэй');}
+  audit('Ажлын статус',(w.equip||w.pd||w.no)+' → '+val);save();toast('Статус: '+val+(w.fault&&val==='Дууссан'?' · зогсолт '+fmtDur(w.down):''));refreshAfterWo();}
 function delWork(id){if(!canDelete()){toast('Зөвхөн админ устгана');return;}if(!confirm('Энэ ажлын бичлэгийг устгах уу?'))return;const w=DB.wos.find(x=>x.id===id);audit('Ажил устгав',w?w.no:String(id));DB.wos=DB.wos.filter(x=>x.id!==id);save();refreshAfterWo();}
 function renderWorkTable(){const rows=currentWorkRows();const hint=canEditWoStatus()?'':' <span style="font-weight:400;text-transform:none;color:var(--muted)">(зөвхөн Админ/Мастер засна)</span>';
-  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>TAG</th><th>PD</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус${hint}</th><th>Огноо</th>${canDelete()?'<th></th>':''}</tr></thead>
+  document.getElementById('wtable').innerHTML=`<thead><tr><th>WO</th><th>TAG</th><th>PD</th><th>Тайлбар</th><th>Байршил</th><th>Инженер</th><th>Статус${hint}</th><th>Зогсолт</th><th>Огноо</th>${canDelete()?'<th></th>':''}</tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td>
       <td>${esc(w.equip)||'—'}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(w.pd)||'—'}</td><td style="max-width:260px">${esc(w.desc)}</td><td class="muted">${esc(w.area)||'—'}</td>
       <td>${esc(w.eng)||'—'}</td><td>${workCell(w)}</td>
-      <td class="muted" style="font-size:12px">${w.date}</td>${canDelete()?'<td>'+delBtn('delWork('+w.id+')')+'</td>':''}</tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
+      <td class="${w.fault&&downtimeOf(w)?'t-warn':'muted'}" style="font-size:12px">${w.fault?downFmt(w):'—'}</td>
+      <td class="muted" style="font-size:12px">${w.date}</td>${canDelete()?'<td>'+delBtn('delWork('+w.id+')')+'</td>':''}</tr>`).join('')||'<tr><td colspan="10" style="text-align:center;padding:32px" class="muted">Илэрц алга.</td></tr>'}</tbody>`;}
 function exportWork(){const rows=[['WO','TAG','PD','Тайлбар','Байршил','Төрөл','Priority','Инженер','Статус','Downtime(мин)','Огноо']];
   currentWorkRows().forEach(w=>rows.push([w.no,w.equip,w.pd||'',w.desc,w.area,w.type,w.prio,w.eng,w.status,downtimeOf(w),w.date]));
   downloadCSV('Ajliin-tuuh_'+RANGE.from+'_'+RANGE.to,rows);}
@@ -852,7 +869,7 @@ function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&isActiveFault(w)).sor
     <thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>📷</th><th>Priority</th><th>Root Cause</th><th>Downtime</th><th>Гэмтлийн төлөв</th></tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td><td>${esc(w.equip)}</td>
       <td style="max-width:240px">${esc(w.desc)}</td><td>${photoThumbs(w.photos)}</td><td><span class="badge ${w.prio==='Эгзэгтэй'?'b-danger':w.prio==='Өндөр'?'b-warn':'b-accent'}">${esc(w.prio)}</span></td>
-      <td class="muted">${esc(w.root)||'—'}</td><td>${downtimeOf(w)} мин</td>
+      <td class="muted">${esc(w.root)||'—'}</td><td>${w.start?'<span class="t-warn">'+fmtDur((Date.now()-new Date(w.start))/60000)+'</span> <span class="muted" style="font-size:10px">(үргэлжилж буй)</span>':'—'}</td>
       <td>${woStatusCell(w)}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Гэмтэл алга.</td></tr>'}</tbody></table></div>`;}
 function photoThumbs(ph){if(!ph||!ph.length)return '<span class="muted">—</span>';return ph.map(d=>'<img src="'+d+'" style="height:32px;border-radius:4px;cursor:zoom-in;margin:1px" onclick="showImgFromEl(this)">').join('');}
 function exportFaults(){const rows=[['WO','Tag','Тайлбар','Priority','Root Cause','Action Taken','Downtime(мин)','Статус','Огноо']];
