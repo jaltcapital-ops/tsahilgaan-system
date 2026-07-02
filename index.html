@@ -1133,9 +1133,9 @@ function viewUsers(){ensureStaff();return `<div class="glass card" style="margin
     <datalist id="hrNames">${(DB.staff||[]).map(s=>`<option value="${esc(s.name)}">${esc(roleLabel(s.role))} · ${esc(s.shift)}</option>`).join('')}</datalist>
     <form onsubmit="addUser(event)"><div class="col3">
       <label class="field"><span>Нэвтрэх нэр *</span><input id="u_username" required placeholder="ж: bat"></label>
-      <label class="field"><span>Овог нэр * <span class="muted" style="font-weight:400">(HR-аас сонго)</span></span><input id="u_name" list="hrNames" required placeholder="Хүний нөөцийн нэртэй ЯГ АДИЛ" oninput="if(!document.getElementById('u_username').value)document.getElementById('u_username').value=cyr2lat((this.value.trim().split(/\\s+/).pop()||''))"></label>
+      <label class="field"><span>Овог нэр * <span class="muted" style="font-weight:400">(HR-аас сонго → албан тушаал авто)</span></span><input id="u_name" list="hrNames" required placeholder="Хүний нөөцийн нэртэй ЯГ АДИЛ" oninput="uNamePick(this.value)"></label>
       <label class="field"><span>Нууц үг *</span><input id="u_pw" required value="123456" placeholder="нууц үг"></label>
-      <label class="field"><span>Эрх / Албан тушаал</span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
+      <label class="field"><span>Эрх / Албан тушаал <span id="u_match" class="muted" style="font-weight:400"></span></span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
       <label class="field"><span>📱 Утас</span><input id="u_phone" placeholder="9911...."></label>
       <label class="field"><span>✉️ Имэйл</span><input id="u_email" type="email" placeholder="name@company.mn"></label>
       <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form>
@@ -1166,6 +1166,13 @@ async function createUsersFromHR(){if(!ME||ME.role!=='ADMIN'){toast('Зөвхө�
     let un=base,n=1;while(exU.has(un)){un=base+(++n);}
     try{await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify({username:un,name:s.name,password:'123456',role:s.role})});exU.add(un);exN.add(s.name);made++;}catch(e){skip++;}}
   toast(made+' бүртгэл үүслээ · '+skip+' алгассан · нууц үг 123456');render();}
+function uNamePick(v){const nm=(v||'').trim();const un=document.getElementById('u_username');
+  if(un&&!un.value.trim())un.value=cyr2lat(nm.split(/\s+/).pop()||'');
+  const st=(DB.staff||[]).find(s=>normName(s.name)===normName(nm));
+  if(st){const rs=document.getElementById('u_role');if(rs)rs.value=st.role;
+    const ph=document.getElementById('u_phone');if(ph&&!ph.value.trim()&&st.phone)ph.value=st.phone;
+    const hint=document.getElementById('u_match');if(hint)hint.innerHTML='✔ HR-тэй таарлаа · '+roleLabel(st.role)+' · Ээлж '+st.shift;}
+  else{const hint=document.getElementById('u_match');if(hint)hint.innerHTML=nm?'⚠ HR-д ийм нэртэй ажилтан алга — нэрийг яг адил бичнэ үү':'';}}
 async function addUser(e){e.preventDefault();
   try{await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify({
       username:val('u_username').trim(),name:val('u_name').trim(),password:val('u_pw'),role:val('u_role'),phone:val('u_phone').trim(),email:val('u_email').trim()})});
@@ -1235,9 +1242,18 @@ function viewHR(){ensureStaff();const isAdmin=ME&&ME.role==='ADMIN';
         <button class="btn btn-sm btn-ghost" onclick="exportStaff()">📤 Excel татах</button>
         <span class="muted" style="font-size:12px">Багана: Овог нэр · Албан тушаал · Ээлж(А/Б/В/Г) · Утас</span></div></div>`:''}
     <div class="grid col2" style="gap:16px;margin-bottom:16px">${SHIFTS.map(card).join('')}</div>`;}
+// Шинэ ажилтныг өмнө нь 14/14 суурьтай ростер сар бүрд ээлжийн offset-оор авто-бөглөж, баталгаажсан бол Цаг бүртгэлд шилжүүлнэ
+function autoRosterForStaff(s){const off={'А':0,'Б':7,'В':14,'Г':21};const o=off[s.shift]||0;let n=0;
+  Object.keys(DB.roster||{}).forEach(m=>{const r=DB.roster[m];if(!r||!r.base)return;const bd=new Date(r.base);if(isNaN(bd))return;const nd=monthDays(m);
+    if(!r.cells[s.id])r.cells[s.id]={};
+    for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const diff=Math.round((new Date(ds)-bd)/86400000);
+      const ph=(((diff-o)%28)+28)%28;const code=ph<7?'Ө':(ph<14?'Ш':'а');r.cells[s.id][ds]=code;n++;
+      if(r.confirmed){const rc=RC_BY[code];if(rc){const h=shiftHours(s,rc.k);upsertAtt(s.id,ds,rc.k,h!=null?h:rc.hrs,'');}}}});
+  return n;}
 function addStaff(e){e.preventDefault();ensureStaff();const name=val('s_name').trim();if(!name)return;
-  DB.staff.push({id:++DB.seq.staff,name,role:val('s_role'),shift:val('s_shift'),loc:val('s_loc'),phone:val('s_phone').trim()});
-  save();toast('Ажилтан нэмэгдлээ ✓');render();}
+  const ns={id:++DB.seq.staff,name,role:val('s_role'),shift:val('s_shift'),loc:val('s_loc'),phone:val('s_phone').trim()};
+  DB.staff.push(ns);const filled=autoRosterForStaff(ns);
+  save();toast('Ажилтан нэмэгдлээ ✓'+(filled?' · ростер '+filled+' нүд авто-үүслээ':''));render();}
 function delStaff(id){if(!confirm('Энэ ажилтныг устгах уу?'))return;DB.staff=DB.staff.filter(p=>p.id!==id);save();render();}
 function exportStaff(){const rows=[['Овог нэр','Албан тушаал','Ээлж','Харьяалал','Утас']];(DB.staff||[]).forEach(p=>rows.push([p.name,roleLabel(p.role),p.shift,staffLoc(p),p.phone||'']));downloadCSV('Eelj-bүrtgel',rows);}
 function staffRoleFrom(t){t=(t||'').toLowerCase();
@@ -1258,8 +1274,9 @@ function importStaff(input){const f=input.files&&input.files[0];if(!f)return;
     const arr=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});let added=0;
     arr.forEach((row,i)=>{if(i===0)return;const name=String(row[0]||'').trim();if(!name)return;
       let sh=String(row[2]||'').trim().toUpperCase();if(!SHIFTS.includes(sh))sh='А';
-      DB.staff.push({id:++DB.seq.staff,name,role:staffRoleFrom(String(row[1]||'')),shift:sh,phone:String(row[3]||'').trim()});added++;});
-    save();toast(added+' ажилтан импортлогдлоо ✓');render();
+      const ns={id:++DB.seq.staff,name,role:staffRoleFrom(String(row[1]||'')),shift:sh,phone:String(row[3]||'').trim()};
+      DB.staff.push(ns);autoRosterForStaff(ns);added++;});
+    save();toast(added+' ажилтан импортлогдлоо ✓ (ростер авто-үүслээ)');render();
   }catch(err){toast('Импорт алдаа: '+err.message);}};
   rd.readAsBinaryString(f);input.value='';}
 /* ---- Цаг бүртгэл (KPI-тай холбогдохгүй) ---- */
