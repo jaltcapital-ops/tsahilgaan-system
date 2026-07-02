@@ -766,8 +766,48 @@ function importPdAsEquip(){if(!ME||ME.role!=='ADMIN'){toast('Зөвхөн адм
   save();audit('PD тоног импортлов',added+' PD');toast(added+' PD тоног үүслээ ✓ (PD ангиллаас харна)');window._eqKind='PD';render();}
 // PD дугаарыг багц болгон бүлэглэх түлхүүр: "11PD-01" → "PD11", "31PD-LVIC" → "PD31"
 function pdGroupKey(tag){const t=String(tag||'');let m=t.match(/(\d+)\s*PD/i);if(m)return 'PD'+m[1];m=t.match(/PD\s*(\d+)/i);if(m)return 'PD'+m[1];return 'Бусад PD';}
-function eqInsCell(e){const nd=nextDueOf(e),dl=daysUntil(nd);
-  return (+e.insFreq>0)?`<span class="badge ${dl<=0?'b-danger':dl<=3?'b-warn':'b-ok'}">${e.insFreq}хон · ${dl<=0?(dl<0?Math.abs(dl)+'ө хэтэрсэн':'өнөөдөр'):dl+'ө үлдсэн'}</span>`:'<span class="muted" style="font-size:11px">—</span>';}
+// Үзлэгийн төлөв — өнгөөр ялгана: 🟢хугацаандаа 🟡удахгүй 🔴хэтэрсэн 🔵өнөөдөр хийсэн
+function insStatus(e){if(!(+e.insFreq>0))return null;const today=iso(new Date());
+  if(lastInspect(e.tag)===today)return {c:'#2e8bff',dot:'🔵',t:'Өнөөдөр хийгдсэн'};
+  const nd=nextDueOf(e),dl=daysUntil(nd);const rem=(e.insRemindDays!=null?e.insRemindDays:3);
+  if(dl<0)return {c:'#ff4d4f',dot:'🔴',t:Math.abs(dl)+' хоног хэтэрсэн',nd,dl};
+  if(dl===0)return {c:'#ff4d4f',dot:'🔴',t:'Өнөөдөр хийх',nd,dl};
+  if(dl<=rem)return {c:'#ffb020',dot:'🟡',t:'Удахгүй ('+dl+' хоног)',nd,dl};
+  return {c:'#2fd07a',dot:'🟢',t:'Хугацаандаа',nd,dl};}
+function eqInsCell(e){
+  if(!(+e.insFreq>0))return `<div style="font-size:11px"><span class="muted">Тохируулаагүй</span><br><button class="btn btn-sm btn-ghost" style="padding:2px 8px;margin-top:2px" onclick="openInsCfg('${esc(e.tag)}')">⚙️ Тохируулах</button></div>`;
+  const s=insStatus(e),nd=nextDueOf(e),auto=(e.insAutoWO!==false);
+  return `<div style="font-size:11px;line-height:1.6;min-width:150px">
+    <div style="color:${s.c};font-weight:700">${s.dot} ${s.t}</div>
+    <div class="muted">🔄 ${e.insFreq} хоног тутам</div>
+    <div class="muted">📅 ${nd||'—'}</div>
+    <div class="muted">🤖 Auto WO: <span style="color:${auto?'#2fd07a':'#8ea2c0'}">${auto?'Идэвхтэй':'Унтраалттай'}</span></div>
+    <button class="btn btn-sm btn-ghost" style="padding:2px 8px;margin-top:2px" onclick="openInsCfg('${esc(e.tag)}')">⚙️ Тохиргоо</button></div>`;}
+// ⚙️ Үзлэгийн тохиргооны Modal (prompt-ийн оронд)
+function openInsCfg(tag){const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)return;
+  const freq=e.insFreq||14,remOn=e.insRemindOn!==false,remDays=(e.insRemindDays!=null?e.insRemindDays:3),auto=(e.insAutoWO!==false),qr=(e.insQrVerify!==false);
+  const nd=(+e.insFreq>0)?nextDueOf(e):null;const last=lastInspect(tag);
+  const o=document.createElement('div');o.id='insCfgModal';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;display:grid;place-items:center;padding:16px';o.onclick=ev=>{if(ev.target===o)o.remove();};
+  o.innerHTML=`<div class="glass card" style="max-width:440px;width:100%">
+    <div class="section-title">⚙️ Үзлэгийн тохиргоо <span class="badge b-accent" style="margin-left:auto;font-family:monospace">${esc(tag)}</span></div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(e.name||'')}</div>
+    ${(nd||last)?`<div class="note" style="font-size:12px;margin-bottom:12px">${last?'Сүүлд: '+last+' · ':''}${nd?'Дараагийн: '+nd:''}</div>`:''}
+    <label class="field"><span>🔄 Үзлэгийн давтамж (хоног)</span><input type="number" id="ic_freq" min="0" value="${freq}" style="font-size:16px"></label>
+    <div style="border-top:1px solid var(--line);margin:12px 0;padding-top:10px">
+      <label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="ic_remon" ${remOn?'checked':''} style="width:auto"> 🔔 Сануулга — хугацаанаас <input type="number" id="ic_remdays" min="0" value="${remDays}" style="width:54px;padding:3px 6px"> хоногийн өмнө</label>
+      <label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="ic_auto" ${auto?'checked':''} style="width:auto"> 🤖 Автомат Work Order идэвхтэй</label>
+      <label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="ic_qr" ${qr?'checked':''} style="width:auto"> 🔲 QR кодоор баталгаажуулах</label></div>
+    <div style="margin-top:8px;display:flex;gap:8px"><button class="btn" onclick="saveInsCfg('${esc(tag)}')">💾 Хадгалах</button><button class="btn btn-ghost" onclick="document.getElementById('insCfgModal').remove()">Болих</button></div></div>`;
+  document.body.appendChild(o);}
+function saveInsCfg(tag){const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)return;
+  e.insFreq=Math.max(0,parseInt(document.getElementById('ic_freq').value,10)||0);
+  e.insRemindOn=document.getElementById('ic_remon').checked;
+  e.insRemindDays=Math.max(0,parseInt(document.getElementById('ic_remdays').value,10)||0);
+  e.insAutoWO=document.getElementById('ic_auto').checked;
+  e.insQrVerify=document.getElementById('ic_qr').checked;
+  if(!e.insStart)e.insStart=iso(new Date());
+  const m=document.getElementById('insCfgModal');if(m)m.remove();
+  save();audit('Үзлэгийн тохиргоо',tag+' ('+e.insFreq+' хоног)');toast('Үзлэгийн тохиргоо хадгалагдлаа ✓');render();}
 function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
   // PD шүүлтүүр идэвхтэй бол багцлан харуулна (PD11 → 11PD-01 ... 11PD-LVIC)
   if((window._eqKind)==='PD'){const groups={};list.forEach(e=>{const k=pdGroupKey(e.tag);(groups[k]=groups[k]||[]).push(e);});
@@ -777,7 +817,7 @@ function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
         <div style="overflow:auto"><table style="margin-top:8px"><thead><tr><th>PD дугаар (TAG)</th><th>Нэр</th><th>🔁 Үзлэг</th><th>Эгзэгтэй</th><th>Үйлдэл</th></tr></thead><tbody>
         ${groups[k].sort((a,b)=>a.tag.localeCompare(b.tag,undefined,{numeric:true})).map(e=>{const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
           return `<tr><td><a onclick="openPdPassport('${esc(e.tag)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline;font-family:monospace">${esc(e.tag)}</a></td>
-          <td>${esc(e.name)||'—'}</td><td style="white-space:nowrap">${eqInsCell(e)} <button class="ic" title="Үзлэгийн давтамж" onclick="setInsFreq('${esc(e.tag)}')">🔁</button></td>
+          <td>${esc(e.name)||'—'}</td><td style="white-space:nowrap">${eqInsCell(e)}</td>
           <td><span class="badge ${tb}">${esc(e.crit)}</span></td>
           <td style="white-space:nowrap"><button class="ic" title="QR хэвлэх" onclick="showPdQR('${esc(e.tag)}')">🔲</button><button class="ic" title="TAG болгох" onclick="toggleEqKind('${esc(e.tag)}')">⇄</button>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')}
         </tbody></table></div></details>`).join('')||'<div class="muted" style="padding:16px">PD алга — "🔌 PD жагсаалтаас татах" дарж үүсгэнэ үү.</div>';}
@@ -789,7 +829,7 @@ function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
       const nd=nextDueOf(e),dl=daysUntil(nd);
       const insCell=(+e.insFreq>0)?`<span class="badge ${dl<=0?'b-danger':dl<=3?'b-warn':'b-ok'}">${e.insFreq}хон · ${dl<=0?(dl<0?Math.abs(dl)+'ө хэтэрсэн':'өнөөдөр'):dl+'ө үлдсэн'}</span>`:'<span class="muted" style="font-size:11px">—</span>';
       return `<tr><td class="t-accent" style="font-family:monospace;cursor:pointer;text-decoration:underline" title="Паспорт нээх" onclick="openPassport('${esc(e.tag)}')">${esc(e.tag)}</td><td>${esc(e.name)}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(e.pd)||'—'}</td><td class="muted">${esc(e.area)||'—'}</td>
-      <td>${esc(e.cat)||'—'} <span class="badge ${equipKind(e)==='PD'?'b-accent':'b-muted'}" style="font-size:10px;cursor:pointer" title="Дарж TAG↔PD солино" onclick="toggleEqKind('${esc(e.tag)}')">${equipKind(e)} ⇄</span></td><td style="white-space:nowrap">${insCell} <button class="ic" title="Үзлэгийн давтамж тохируулах" onclick="setInsFreq('${esc(e.tag)}')">🔁</button></td>
+      <td>${esc(e.cat)||'—'} <span class="badge ${equipKind(e)==='PD'?'b-accent':'b-muted'}" style="font-size:10px;cursor:pointer" title="Дарж TAG↔PD солино" onclick="toggleEqKind('${esc(e.tag)}')">${equipKind(e)} ⇄</span></td><td>${eqInsCell(e)}</td>
       <td><span class="badge ${tb}">${esc(e.crit)}</span></td><td>${f}</td>
       <td style="white-space:nowrap"><button class="ic" title="QR хэвлэх" onclick="showEqQR('${esc(e.tag)}')">🔲</button>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')||'<tr><td colspan="9" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж олдсонгүй.</td></tr>'}</tbody></table></div>`;}
 function refreshEq(v){window._eq=v;document.getElementById('eqResults').innerHTML=eqResultsHTML();}
@@ -1231,8 +1271,15 @@ function setInsFreq(tag){const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)retur
 // Poll дээр — хугацаа болсон тоногт нэг удаа сануулга
 async function checkInspections(){if(!ME||!['ADMIN','MASTER'].includes(ME.role))return;let ch=false;
   const masters=(DB.staff||[]).filter(s=>s.role==='MASTER').map(s=>s.name);   // зөвхөн цахилгааны мастер(ууд)-т
-  pendingInspect('ALL').forEach(x=>{const e=(DB.equip||[]).find(q=>q.tag===x.tag);if(!e)return;if(e.insRemind===x.nextDue)return;if(openInsWO(x.tag))return;
-    e.insRemind=x.nextDue;ch=true;const msg='⏰ ҮЗЛЭГИЙН ХУГАЦАА БОЛЛОО\nТоног: '+x.tag+' '+(x.name||'')+'\nХугацаа: '+x.nextDue+' ('+(x.daysLeft<0?Math.abs(x.daysLeft)+' хоног хэтэрсэн':'өнөөдөр')+')\nМастер "Наряд үүсгэх" дарж гүйцэтгэгч сонгоно уу.';
+  // Сануулга — тохиргоогоор (insRemindDays) хугацаанаас өмнө эсвэл хэтэрсэн үед нэг удаа
+  scheduledInspect('ALL').forEach(x=>{const e=(DB.equip||[]).find(q=>q.tag===x.tag);if(!e)return;
+    if(e.insRemindOn===false)return;const rem=(e.insRemindDays!=null?e.insRemindDays:3);
+    if(x.daysLeft>rem)return;                       // хугацаа ойртоогүй бол алгасна
+    if(e.insRemind===x.nextDue)return;              // энэ мөчлөгт аль хэдийн сануулсан
+    if(openInsWO(x.tag))return;                     // нээлттэй наряд байвал алгасна
+    e.insRemind=x.nextDue;ch=true;
+    const st=x.daysLeft<0?Math.abs(x.daysLeft)+' хоног хэтэрсэн':(x.daysLeft===0?'өнөөдөр':x.daysLeft+' хоногийн дараа');
+    const msg='⏰ ҮЗЛЭГИЙН СAНУУЛГА\nТоног: '+x.tag+' '+(x.name||'')+'\nТовлосон: '+x.nextDue+' ('+st+')\nМастер "Наряд үүсгэх" дарж гүйцэтгэгч сонгоно уу.';
     notify(msg);if(masters.length)masters.forEach(nm=>pushNotif(nm,msg));else pushNotif('*',msg);});
   if(ch)await saveNow();}
 function viewInspect(){if(!DB.inspections)DB.inspections=[];if(!DB.checkItems)DB.checkItems=[];
@@ -1266,20 +1313,23 @@ function inspectStatusPanels(){const cat=window._insCat||'ALL';const pend=pendin
   const upcoming=sched.filter(x=>x.daysLeft>0).sort((a,b)=>a.daysLeft-b.daysLeft);
   const mgr=canEditWoStatus();
   const tabs=[['ALL','Бүгд'],['PD','PD'],['TAG','TAG']].map(([c,l])=>`<button class="${cat===c?'on':''}" onclick="setInsCat('${c}')">${l}</button>`).join('');
-  const pendRows=pend.map(x=>{const wo=openInsWO(x.tag);return `<tr><td class="t-accent" style="font-family:monospace">${esc(x.tag)}</td><td>${esc(x.name||'')}</td><td><span class="badge b-muted">${x.kind}</span></td>
-    <td class="muted">${x.last||'—'}</td><td class="t-danger">${x.nextDue}</td>
-    <td class="t-danger" style="font-weight:700">${x.daysLeft<0?Math.abs(x.daysLeft)+' хоног хэтэрсэн':'өнөөдөр'}</td>
-    <td>${wo?`<span class="badge b-warn">Наряд #${wo.no} үүссэн</span>`:(mgr?`<button class="btn btn-sm" onclick="createInsWO('${esc(x.tag)}')">➕ Наряд үүсгэх</button>`:'<span class="muted">хүлээгдэж буй</span>')}</td></tr>`;}).join('');
-  const upRows=upcoming.slice(0,40).map(x=>`<tr><td class="t-accent" style="font-family:monospace">${esc(x.tag)}</td><td>${esc(x.name||'')}</td><td><span class="badge b-muted">${x.kind}</span></td>
-    <td class="muted">${x.last||'—'}</td><td>${x.nextDue}</td><td class="${x.daysLeft<=3?'t-warn':'t-ok'}" style="font-weight:700">${x.daysLeft} хоног</td>
-    <td>${x.insFreq} хоног тутам ${canSeeRef()?`<button class="ic" title="Давтамж засах" onclick="setInsFreq('${esc(x.tag)}')">🔁</button>`:''}</td></tr>`).join('');
+  const stCell=x=>{const s=insStatus(x);return s?`<span style="color:${s.c};font-weight:700;white-space:nowrap">${s.dot} ${s.t}</span>`:'—';};
+  const autoCell=x=>`🤖 <span style="color:${x.insAutoWO!==false?'#2fd07a':'#8ea2c0'}">${x.insAutoWO!==false?'Идэвхтэй':'Унтраалттай'}</span>`;
+  const tagLink=t=>`<a onclick="openPassport('${esc(t)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline;font-family:monospace" title="Дэлгэрэнгүй / үзлэгийн түүх">${esc(t)}</a>`;
+  const pendRows=pend.map(x=>{const wo=openInsWO(x.tag);return `<tr><td>${tagLink(x.tag)}</td><td>${esc(x.name||'')}</td><td><span class="badge b-muted">${x.kind}</span></td>
+    <td>${stCell(x)}</td><td class="muted">🔄 ${x.insFreq} хоног</td><td class="muted">📅 ${x.nextDue}</td>
+    <td>${wo?`<span class="badge b-warn">Наряд #${wo.no} үүссэн</span>`:(mgr?`<button class="btn btn-sm" onclick="createInsWO('${esc(x.tag)}')">➕ Наряд үүсгэх</button>`:'<span class="muted">хүлээгдэж буй</span>')} <button class="ic" title="Үзлэгийн тохиргоо" onclick="openInsCfg('${esc(x.tag)}')">⚙️</button></td></tr>`;}).join('');
+  const upRows=upcoming.slice(0,60).map(x=>`<tr><td>${tagLink(x.tag)}</td><td>${esc(x.name||'')}</td><td><span class="badge b-muted">${x.kind}</span></td>
+    <td>${stCell(x)}</td><td class="muted">🔄 ${x.insFreq} хоног</td><td class="muted">📅 ${x.nextDue}</td><td>${autoCell(x)}</td>
+    <td><button class="btn btn-sm btn-ghost" onclick="openInsCfg('${esc(x.tag)}')">⚙️ Тохиргоо</button></td></tr>`).join('');
   return `<div class="glass card" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <b style="font-size:14px">🗂️ Ангилал:</b><div class="seg">${tabs}</div>
-      <span class="badge b-danger" style="margin-left:auto">Хугацаа болсон: ${pend.length}</span><span class="badge b-accent">Төлөвлөгдсөн: ${sched.length}</span></div>
+      <span class="badge b-danger" style="margin-left:auto">Хугацаа болсон: ${pend.length}</span><span class="badge b-accent">Төлөвлөгдсөн: ${sched.length}</span>
+      <span class="muted" style="font-size:11px;width:100%">🟢 Хугацаандаа · 🟡 Удахгүй · 🔴 Хэтэрсэн · 🔵 Өнөөдөр хийгдсэн · TAG дээр дарж дэлгэрэнгүй/түүхийг харна</span></div>
   <div class="glass card" style="margin-bottom:16px;${pend.length?'border:1px solid rgba(255,77,79,.5)':''}"><div class="section-title">⏰ Хугацаа болсон үзлэг (Pending) <span class="badge ${pend.length?'b-danger':'b-ok'}" style="margin-left:auto">${pend.length}</span></div>
-    ${pend.length?`<div style="overflow:auto"><table><thead><tr><th>TAG</th><th>Нэр</th><th>Ангилал</th><th>Сүүлд</th><th>Товлосон</th><th>Төлөв</th><th>Үйлдэл</th></tr></thead><tbody>${pendRows}</tbody></table></div>`:'<div class="muted" style="padding:10px">Хугацаа болсон үзлэг алга — бүгд хэвийн ✓</div>'}</div>
-  <div class="glass card" style="margin-bottom:16px"><div class="section-title">📅 Төлөвлөгдсөн үзлэг (үлдсэн хоног) <span class="badge b-accent" style="margin-left:auto">${upcoming.length}</span></div>
-    ${upcoming.length?`<div style="overflow:auto"><table><thead><tr><th>TAG</th><th>Нэр</th><th>Ангилал</th><th>Сүүлд</th><th>Дараагийн</th><th>Үлдсэн</th><th>Давтамж</th></tr></thead><tbody>${upRows}</tbody></table></div>`:'<div class="muted" style="padding:10px">Төлөвлөгдсөн үзлэг алга — тоног дээр давтамж (хоног) тохируулна уу.</div>'}</div>`;}
+    ${pend.length?`<div style="overflow:auto"><table><thead><tr><th>TAG</th><th>Нэр</th><th>Ангилал</th><th>🟢 Төлөв</th><th>🔄 Давтамж</th><th>📅 Дараагийн</th><th>Үйлдэл</th></tr></thead><tbody>${pendRows}</tbody></table></div>`:'<div class="muted" style="padding:10px">Хугацаа болсон үзлэг алга — бүгд хэвийн ✓</div>'}</div>
+  <div class="glass card" style="margin-bottom:16px"><div class="section-title">📅 Төлөвлөгдсөн үзлэг <span class="badge b-accent" style="margin-left:auto">${upcoming.length}</span></div>
+    ${upcoming.length?`<div style="overflow:auto"><table><thead><tr><th>TAG</th><th>Нэр</th><th>Ангилал</th><th>🟢 Төлөв</th><th>🔄 Давтамж</th><th>📅 Дараагийн үзлэг</th><th>🤖 Auto WO</th><th>⚙️</th></tr></thead><tbody>${upRows}</tbody></table></div>`:'<div class="muted" style="padding:10px">Төлөвлөгдсөн үзлэг алга — доод хэсгээс тоног сонгож ⚙️ тохиргоогоор давтамж тохируулна уу.</div>'}</div>`;}
 function saveInspection(e){e.preventDefault();if(!DB.inspections)DB.inspections=[];if(!DB.seq.inspection)DB.seq.inspection=0;
   const items=DB.checkItems||[];const results=items.map((it,idx)=>({item:it,status:val('ins_st_'+idx),note:val('ins_nt_'+idx)}));
   const overall=results.some(r=>r.status==='Анхаарах')?'Анхаарах':'OK';
