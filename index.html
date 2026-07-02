@@ -1243,8 +1243,11 @@ function autoTemplate(e){const s=((e.tag||'')+' '+(e.name||''));
 }
 function templateFor(e){e=e||{};const id=e.insTpl&&INS_TEMPLATES[e.insTpl]?e.insTpl:autoTemplate(e);return INS_TEMPLATES[id]||INS_TEMPLATES.standard;}
 /* ===== PD ангиллын тоног төхөөрөмжийг нэг удаа бүртгэх ===== */
-const PD_SEED=[['10кВ ХБ-1',''],['10кВ ХБ-2',''],['10кВ ХБ-3',''],['ТНБА-1 PD11','PD11'],['ТНБА-1 PD12','PD12'],['Шигших бутлах PD21','PD21'],['ББА-1 PD83','PD83'],['ББА-2 PD84','PD84'],['Дамжуулах-10 PD91','PD91'],['Ачилтын систем PD81','PD81'],['Ачилтын систем PD82','PD82'],['Дулааны станц PD11','PD11'],['Вагонд ачилтын систем PD','PD'],['Үндсэн үйлдвэр PD31','PD31'],['Үндсэн үйлдвэр PD32','PD32'],['Үндсэн үйлдвэр PD33','PD33'],['Үндсэн үйлдвэр PD34','PD34'],['Үндсэн үйлдвэр PD35','PD35'],['Үндсэн үйлдвэр PD36','PD36']];
-function ensurePdEquip(){if(DB.pdSeedV1)return;if(!DB.equip)DB.equip=[];const have=new Set(DB.equip.map(e=>e.tag));let n=0;
+const PD_SEED=[['10кВ ХБ-1',''],['10кВ ХБ-2',''],['10кВ ХБ-3',''],['ТНБА-1 PD11','PD11'],['ТНБА-1 PD12','PD12'],['Шигших бутлах PD21','PD21'],['ББА-1 PD83','PD83'],['ББА-2 PD84','PD84'],['Дамжуулах-10 PD91','PD91'],['Ачилтын систем PD81','PD81'],['Ачилтын систем PD82','PD82'],['Вагонд ачилтын систем PD','PD'],['Үндсэн үйлдвэр PD31','PD31'],['Үндсэн үйлдвэр PD32','PD32'],['Үндсэн үйлдвэр PD33','PD33'],['Үндсэн үйлдвэр PD34','PD34'],['Үндсэн үйлдвэр PD35','PD35'],['Үндсэн үйлдвэр PD36','PD36']];
+function ensurePdEquip(){
+  // Cleanup: буруу seed "Дулааны станц PD11"-г нэг удаа устгана (ТНБА-1 PD11 аль хэдийн бий)
+  if(!DB.pdFixV1){if(DB.equip)DB.equip=DB.equip.filter(e=>e.tag!=='Дулааны станц PD11');DB.pdFixV1=true;save();}
+  if(DB.pdSeedV1)return;if(!DB.equip)DB.equip=[];const have=new Set(DB.equip.map(e=>e.tag));let n=0;
   PD_SEED.forEach(([nm,pd])=>{if(have.has(nm))return;DB.equip.push({tag:nm,name:nm,pd:pd,cat:'PD',area:'',crit:'Дунд',insKind:'PD',insFreq:0,insStart:iso(new Date())});have.add(nm);n++;});
   DB.pdSeedV1=true;save();if(n)audit('PD тоног seed',n+' ширхэг');}
 /* ===== Config-driven үзлэгийн маягт (radio + тоон утга) ===== */
