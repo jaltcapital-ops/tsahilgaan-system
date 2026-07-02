@@ -327,7 +327,7 @@ function presetRange(p){const now=new Date();const to=iso(now);
   if(p==='week'){const f=new Date(now);f.setDate(f.getDate()-6);return{from:iso(f),to};}
   if(p==='year')return{from:now.getFullYear()+'-01-01',to};
   return{from:to.slice(0,8)+'01',to};}
-let PRESET='custom',RANGE={from:'2026-06-01',to:'2026-06-30'};
+let PRESET='month',RANGE=(function(){const d=new Date(),y=d.getFullYear(),m=d.getMonth();return{from:y+'-'+String(m+1).padStart(2,'0')+'-01',to:y+'-'+String(m+1).padStart(2,'0')+'-'+String(new Date(y,m+1,0).getDate()).padStart(2,'0')};})();
 function setPreset(p){PRESET=p;RANGE=presetRange(p);syncDates();renderPresets();render();}
 function setCustom(){PRESET='custom';RANGE={from:document.getElementById('dFrom').value,to:document.getElementById('dTo').value};renderPresets();render();}
 function syncDates(){document.getElementById('dFrom').value=RANGE.from;document.getElementById('dTo').value=RANGE.to;}
@@ -843,7 +843,7 @@ function viewEng(){const m={};DB.wos.filter(w=>inRange(w.date)&&w.eng).forEach(w
     <tbody>${rows.map(([n,d])=>`<tr><td>${esc(n)}</td><td>${d.works}</td><td class="t-ok">${d.done}</td><td class="t-warn">${d.down}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:32px" class="muted">Өгөгдөл алга.</td></tr>'}</tbody></table></div>`;}
 
 /* ---- Гэмтэл ---- */
-function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&isActiveFault(w)&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1);
+function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&isActiveFault(w)).sort((a,b)=>a.date<b.date?1:-1);
   const fixed=DB.wos.filter(w=>w.fault&&!isActiveFault(w)&&inRange(w.date)).length;
   return `<div class="note" style="margin-bottom:16px">Зөвхөн <b>идэвхтэй (засагдаагүй)</b> гэмтэл харагдана. Засварласан гэмтэл <b>Ажлын түүх</b> рүү шилжинэ${fixed?' ('+fixed+' засварласан)':''}.
     <button class="btn btn-sm" style="margin-left:10px" onclick="go('new')">➕ Гэмтэл бүртгэх</button> <button class="btn btn-sm btn-ghost" onclick="go('work')">📋 Ажлын түүх</button></div>
@@ -1128,11 +1128,12 @@ function addRef(kind){if(!DB[kind])DB[kind]=[];const inp=document.getElementById
 function delRef(kind,idx){DB[kind].splice(idx,1);save();render();}
 
 /* ---- ХЭРЭГЛЭГЧИД (Админ) ---- */
-function viewUsers(){return `<div class="glass card" style="margin-bottom:16px">
+function viewUsers(){ensureStaff();return `<div class="glass card" style="margin-bottom:16px">
     <div class="section-title">➕ Шинэ хэрэглэгч нэмэх</div>
+    <datalist id="hrNames">${(DB.staff||[]).map(s=>`<option value="${esc(s.name)}">${esc(roleLabel(s.role))} · ${esc(s.shift)}</option>`).join('')}</datalist>
     <form onsubmit="addUser(event)"><div class="col3">
       <label class="field"><span>Нэвтрэх нэр *</span><input id="u_username" required placeholder="ж: bat"></label>
-      <label class="field"><span>Овог нэр *</span><input id="u_name" required placeholder="ж: Бат-Эрдэнэ"></label>
+      <label class="field"><span>Овог нэр * <span class="muted" style="font-weight:400">(HR-аас сонго)</span></span><input id="u_name" list="hrNames" required placeholder="Хүний нөөцийн нэртэй ЯГ АДИЛ" oninput="if(!document.getElementById('u_username').value)document.getElementById('u_username').value=cyr2lat((this.value.trim().split(/\\s+/).pop()||''))"></label>
       <label class="field"><span>Нууц үг *</span><input id="u_pw" required value="123456" placeholder="нууц үг"></label>
       <label class="field"><span>Эрх / Албан тушаал</span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
       <label class="field"><span>📱 Утас</span><input id="u_phone" placeholder="9911...."></label>
