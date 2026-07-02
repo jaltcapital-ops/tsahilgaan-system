@@ -1175,27 +1175,49 @@ function insEquipList(){return (DB.equip||[]).filter(e=>+e.insFreq>0).map(e=>{co
 function pendingInspect(cat){let a=insEquipList().filter(x=>x.daysLeft<=0);if(cat&&cat!=='ALL')a=a.filter(x=>x.kind===cat);return a.sort((p,q)=>p.daysLeft-q.daysLeft);}
 function scheduledInspect(cat){let a=insEquipList();if(cat&&cat!=='ALL')a=a.filter(x=>x.kind===cat);return a.sort((p,q)=>(p.daysLeft||0)-(q.daysLeft||0));}
 function openInsWO(tag){return (DB.naryad||[]).find(w=>w.insTag===tag&&!WO_DONE(w)&&w.status!=='Cancelled');}
-// Мастер/ахлахын зөвшөөрлөөр үзлэгийн Work Order авто үүсгэнэ
+// Мастер "Наряд үүсгэх" дархад — гүйцэтгэгчийг сонгох модал нээнэ
+const INS_ROLES=['ELEC','ISO_TECH','AUTO_TECH','ELEC_ASST','EE','AUTO_EE'];  // цахилгаанчин, тусгаарлалт, автоматжуулалт, туслах, инженер
 function createInsWO(tag){if(!canEditWoStatus()){toast('Зөвхөн Мастер/Ахлах наряд үүсгэнэ');return;}
   const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)return;if(openInsWO(tag)){toast('Энэ тоногт нээлттэй үзлэгийн наряд байна');return;}
+  ensureStaff();const staff=[...(DB.staff||[])].filter(s=>INS_ROLES.includes(s.role));
+  const byRole={};staff.forEach(s=>{(byRole[s.role]=byRole[s.role]||[]).push(s);});
+  const order=ROLES.map(r=>r[0]).filter(r=>byRole[r]);
+  const groups=order.map(r=>`<div style="margin:8px 0;border-bottom:1px solid var(--line);padding-bottom:6px"><div style="font-weight:600;font-size:13px;margin-bottom:3px">${esc(roleLabel(r))} <span class="muted" style="font-weight:400">(${byRole[r].length})</span></div>
+    ${byRole[r].sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name)).map(s=>`<label style="display:inline-flex;gap:5px;align-items:center;margin:3px 12px 3px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="ins_as" value="${s.id}" style="width:auto"> <span class="badge b-muted" style="font-size:10px">${esc(s.shift)}</span> ${esc(s.name)}</label>`).join('')}</div>`).join('')||'<div class="muted">Ажилтан алга</div>';
+  const o=document.createElement('div');o.id='insWoModal';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:grid;place-items:center;padding:16px';o.onclick=ev=>{if(ev.target===o)o.remove();};
+  o.innerHTML=`<div class="glass card" style="max-width:640px;width:100%;max-height:85vh;overflow:auto">
+    <div class="section-title">🔧 Үзлэгийн наряд — гүйцэтгэгч сонгох <span class="badge b-accent" style="margin-left:auto;font-family:monospace">${esc(tag)}</span></div>
+    <div class="muted" style="font-size:12px;margin-bottom:8px">${esc(e.name||'')} · ${e.insFreq} хоног тутам · Хэнийг үзлэгт явуулахаа чеклэнэ үү:</div>
+    <div style="margin-bottom:8px"><label style="font-size:12px;cursor:pointer"><input type="checkbox" style="width:auto" onchange="document.querySelectorAll('.ins_as').forEach(c=>c.checked=this.checked)"> Бүгдийг сонгох</label></div>
+    ${groups}
+    <div style="margin-top:14px;display:flex;gap:8px"><button class="btn" onclick="confirmInsWO('${esc(tag)}')">📩 Наряд үүсгэж илгээх</button><button class="btn btn-ghost" onclick="document.getElementById('insWoModal').remove()">Болих</button></div></div>`;
+  document.body.appendChild(o);}
+function confirmInsWO(tag){const ids=Array.from(document.querySelectorAll('.ins_as:checked')).map(c=>+c.value);
+  if(!ids.length){toast('Дор хаяж нэг ажилтан сонгоно уу');return;}
+  const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)return;if(openInsWO(tag)){toast('Энэ тоногт нээлттэй наряд байна');return;}
   if(!DB.naryad)DB.naryad=[];if(!DB.seq.naryad)DB.seq.naryad=0;
-  const w={id:++DB.seq.naryad,no:'ND'+Date.now().toString().slice(-9),title:'Төлөвлөгөөт үзлэг: '+tag+' '+(e.name||''),desc:'Автоматаар үүсгэсэн төлөвлөгөөт үзлэг ('+e.insFreq+' хоног тутам). QR/Tag уншуулж баталгаажуулна.',
-    assignees:[],assigneeNames:[],area:e.area||'',equip:tag,pd:e.pd||'',equips:[tag],pds:e.pd?[e.pd]:[],type:'Үзлэг',prio:'Дунд',
-    plannedStart:'',plannedFinish:'',status:'New',sessions:[],runningSince:null,safety:{},files:[],acceptedBy:'',rejectNote:'',completeNote:'',photos:[],parts:[],
+  const names=ids.map(staffName);
+  const w={id:++DB.seq.naryad,no:'ND'+Date.now().toString().slice(-9),title:'Төлөвлөгөөт үзлэг: '+tag+' '+(e.name||''),desc:'Төлөвлөгөөт үзлэг ('+e.insFreq+' хоног тутам). QR/Tag уншуулж баталгаажуулна.',
+    assignees:ids,assigneeNames:names,area:e.area||'',equip:tag,pd:e.pd||'',equips:[tag],pds:e.pd?[e.pd]:[],type:'Үзлэг',prio:'Дунд',
+    plannedStart:'',plannedFinish:'',status:'Assigned',sessions:[],runningSince:null,safety:{},files:[],acceptedBy:'',rejectNote:'',completeNote:'',photos:[],parts:[],
     insWO:true,insTag:tag,createdBy:ME?ME.name:'',createdAt:new Date().toISOString().slice(0,16),actualStart:'',completedAt:'',finishedAt:''};
-  DB.naryad.push(w);audit('Үзлэгийн наряд авто үүсгэв',tag);
-  notify('🔧 ТӨЛӨВЛӨГӨӨТ ҮЗЛЭГ — наряд үүслээ\nТоног: '+tag+' '+(e.name||'')+'\nДавтамж: '+e.insFreq+' хоног\n🔗 QR/Tag уншуулж гүйцэтгэнэ');pushNotif('*','🔧 Үзлэгийн наряд: '+tag+' — гүйцэтгэхийг хүлээж байна');
-  save();toast('Үзлэгийн наряд үүслээ ✓ — Work Order цэснээс харна');}
+  DB.naryad.push(w);const link=location.origin+'/?wo='+w.id;
+  names.forEach(nm=>pushNotif(nm,'🔧 Танд үзлэгийн наряд оноогдлоо: '+tag+' '+(e.name||''),link));
+  notify('🔧 ТӨЛӨВЛӨГӨӨТ ҮЗЛЭГ — наряд илгээгдлээ\nТоног: '+tag+' '+(e.name||'')+'\nГүйцэтгэгч: '+names.join(', ')+'\n🔗 Нээх: '+link);
+  audit('Үзлэгийн наряд илгээв',tag+' → '+names.join(', '));
+  const m=document.getElementById('insWoModal');if(m)m.remove();
+  save();toast('Үзлэгийн наряд '+names.length+' хүнд илгээгдлээ ✓');render();}
 // Тухайн тоногт үзлэг хийгдмэгц нээлттэй үзлэгийн WO-г Completed болгоно
 function completeInsWO(tag){const w=openInsWO(tag);if(!w)return null;w.status='Completed';w.completedAt=new Date().toISOString().slice(0,16);w.finishedAt=w.completedAt;w.completeNote='Үзлэг баталгаажлаа (QR/Tag)';audit('Үзлэгийн WO дуусгав',w.no);return w;}
 function setInsFreq(tag){const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)return;
   const f=prompt('"'+tag+'" — Үзлэгийн давтамж (хоног, 0=цуцлах):',e.insFreq||'');if(f===null)return;
   e.insFreq=Math.max(0,parseInt(f,10)||0);if(!e.insStart)e.insStart=iso(new Date());save();toast('Давтамж хадгалагдлаа ✓');render();}
 // Poll дээр — хугацаа болсон тоногт нэг удаа сануулга
-async function checkInspections(){if(!ME||!['ADMIN','CHIEF','MASTER'].includes(ME.role))return;let ch=false;
+async function checkInspections(){if(!ME||!['ADMIN','MASTER'].includes(ME.role))return;let ch=false;
+  const masters=(DB.staff||[]).filter(s=>s.role==='MASTER').map(s=>s.name);   // зөвхөн цахилгааны мастер(ууд)-т
   pendingInspect('ALL').forEach(x=>{const e=(DB.equip||[]).find(q=>q.tag===x.tag);if(!e)return;if(e.insRemind===x.nextDue)return;if(openInsWO(x.tag))return;
-    e.insRemind=x.nextDue;ch=true;const msg='⏰ ҮЗЛЭГИЙН ХУГАЦАА БОЛЛОО\nТоног: '+x.tag+' '+(x.name||'')+'\nХугацаа: '+x.nextDue+' ('+(x.daysLeft<0?Math.abs(x.daysLeft)+' хоног хэтэрсэн':'өнөөдөр')+')\nМастер зөвшөөрлөөр наряд үүсгэнэ үү.';
-    notify(msg);pushNotif('*',msg);});
+    e.insRemind=x.nextDue;ch=true;const msg='⏰ ҮЗЛЭГИЙН ХУГАЦАА БОЛЛОО\nТоног: '+x.tag+' '+(x.name||'')+'\nХугацаа: '+x.nextDue+' ('+(x.daysLeft<0?Math.abs(x.daysLeft)+' хоног хэтэрсэн':'өнөөдөр')+')\nМастер "Наряд үүсгэх" дарж гүйцэтгэгч сонгоно уу.';
+    notify(msg);if(masters.length)masters.forEach(nm=>pushNotif(nm,msg));else pushNotif('*',msg);});
   if(ch)await saveNow();}
 function viewInspect(){if(!DB.inspections)DB.inspections=[];if(!DB.checkItems)DB.checkItems=[];
   const sel=window._inspectEquip||'';const items=DB.checkItems;
