@@ -27,17 +27,45 @@
                radial-gradient(900px 500px at -10% 20%,rgba(30,200,200,.06),transparent),var(--base);min-height:100vh}
   .glass{background:linear-gradient(180deg,rgba(23,33,57,.9),rgba(18,26,46,.9));border:1px solid var(--line);border-radius:16px}
   .app{display:flex;min-height:100vh}
-  aside{width:240px;flex-shrink:0;border-right:1px solid var(--line);background:rgba(18,26,46,.6);
-    display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
-  .brand{display:flex;gap:10px;align-items:center;padding:16px;border-bottom:1px solid var(--line)}
-  .brand .logo{width:38px;height:38px;border-radius:11px;background:rgba(46,139,255,.2);color:var(--accent);display:grid;place-items:center;font-size:20px}
+  aside{width:260px;flex-shrink:0;border-right:1px solid var(--line);background:rgba(18,26,46,.6);
+    display:flex;flex-direction:column;position:sticky;top:0;height:100vh;transition:width .25s ease;box-shadow:2px 0 12px rgba(0,0,0,.15)}
+  body.navcol aside{width:80px}
+  .brand{display:flex;gap:10px;align-items:center;padding:14px 12px;border-bottom:1px solid var(--line)}
+  .brand .logo{width:38px;height:38px;border-radius:11px;background:rgba(46,139,255,.2);color:var(--accent);display:grid;place-items:center;font-size:20px;flex-shrink:0;cursor:pointer}
   .brand b{font-size:14px} .brand small{color:var(--muted);font-size:11px;display:block}
-  nav{flex:1;overflow:auto;padding:8px}
-  nav a{display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:10px;color:var(--muted);text-decoration:none;font-size:14px;cursor:pointer}
-  nav a:hover{background:rgba(255,255,255,.05);color:#fff}
-  nav a.active{background:rgba(46,139,255,.15);color:var(--accent)}
-  nav .navgrp{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:14px 12px 4px;opacity:.65;font-weight:600}
-  nav .navgrp:first-child{padding-top:4px}
+  .brand .bx{min-width:0;flex:1}
+  .navcolbtn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;width:28px;height:28px;flex-shrink:0;transition:.2s}
+  .navcolbtn:hover{background:rgba(46,139,255,.15);color:var(--accent)}
+  body.navcol .brand .bx,body.navcol .navcolbtn{display:none}
+  .qa-bar{display:flex;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap;justify-content:center}
+  .qa{width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer;display:grid;place-items:center;font-size:16px;transition:.2s}
+  .qa:hover{background:rgba(46,139,255,.18);border-color:var(--accent);transform:translateY(-1px)}
+  nav{flex:1;overflow:auto;padding:8px 8px 4px}
+  .navgrp-h{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;padding:12px 10px 5px;cursor:pointer;transition:.15s}
+  .navgrp-h:hover{color:var(--text)}
+  .navgrp-h .gico{font-size:13px;flex-shrink:0}
+  .navgrp-h .chev{margin-left:auto;transition:transform .2s;font-size:9px;opacity:.7}
+  .navgrp-h.closed .chev{transform:rotate(-90deg)}
+  .navgrp-items{overflow:hidden;max-height:600px;transition:max-height .28s ease}
+  .navgrp-items.closed{max-height:0}
+  nav a{display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:8px;color:var(--muted);text-decoration:none;font-size:13.5px;cursor:pointer;position:relative;transition:.15s;margin:2px 0}
+  nav a .ico{width:20px;text-align:center;flex-shrink:0;font-size:15px}
+  nav a:hover{background:rgba(46,139,255,.10);color:#fff}
+  nav a.active{background:rgba(46,139,255,.16);color:var(--accent);font-weight:700}
+  nav a.active::before{content:'';position:absolute;left:-8px;top:6px;bottom:6px;width:4px;border-radius:0 3px 3px 0;background:var(--accent)}
+  .nav-foot{padding:10px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+  .nav-foot .u{display:flex;gap:8px;align-items:center;min-width:0}
+  .nav-foot .uav{width:34px;height:34px;border-radius:50%;background:rgba(46,139,255,.2);color:var(--accent);display:grid;place-items:center;font-weight:700;flex-shrink:0}
+  .nav-foot .fbtns{display:flex;gap:6px}
+  .nav-foot .fbtn{flex:1;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;padding:7px;font-size:12px;transition:.2s}
+  .nav-foot .fbtn:hover{background:rgba(46,139,255,.15);color:var(--accent)}
+  /* Collapsed (80px) — зөвхөн icon */
+  body.navcol .qa-bar{flex-direction:column;padding:8px 0}
+  body.navcol nav a .lbl,body.navcol nav a .nbadge,body.navcol .navgrp-h .lbl,body.navcol .navgrp-h .chev,body.navcol .nav-foot .u .ux,body.navcol .nav-foot .fbtn .lbl{display:none}
+  body.navcol nav a,body.navcol .navgrp-h{justify-content:center;padding-left:0;padding-right:0}
+  body.navcol nav a.active::before{left:0}
+  body.navcol .nav-foot .fbtns{flex-direction:column}
+  .nbadge{margin-left:auto;background:#ff4d4f;color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 7px;min-width:18px;text-align:center}
   main{flex:1;min-width:0;display:flex;flex-direction:column}
   header{position:sticky;top:0;z-index:10;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
     padding:12px 20px;border-bottom:1px solid var(--line);background:rgba(18,26,46,.85);backdrop-filter:blur(8px)}
@@ -53,7 +81,7 @@
   .grid{display:grid;gap:12px}
   .kpis{grid-template-columns:repeat(6,1fr)}
   @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
-  @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)} aside{position:fixed;left:-240px;z-index:50;transition:.2s} aside.open{left:0} .menu-btn{display:block!important} .col3,.col2{grid-template-columns:1fr!important}}
+  @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)} aside{position:fixed;left:-280px;z-index:50;transition:left .25s} aside.open{left:0;box-shadow:0 0 0 100vmax rgba(0,0,0,.5)} body.navcol aside{width:260px} .menu-btn{display:block!important} .navcolbtn{display:none!important} .col3,.col2{grid-template-columns:1fr!important}}
   .card{padding:16px;position:relative;overflow:hidden;animation:rise .35s both}
   @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
   .kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
@@ -116,11 +144,13 @@
 
 <div id="app" class="app hidden">
   <aside id="side">
-    <div class="brand"><div class="logo">⚡</div><div><b>Цахилгааны нэгж</b><small>НБҮГ-ЗТХ · Тайлан</small></div></div>
+    <div class="brand"><div class="logo" onclick="toggleNavCol()" title="Хумих / дэлгэх">⚡</div><div class="bx"><b>Цахилгааны нэгж</b><small>НБҮГ-ЗТХ · Тайлан</small></div>
+      <button class="navcolbtn" onclick="toggleNavCol()" title="Sidebar хумих">‹</button></div>
+    <div class="qa-bar" id="qaBar"></div>
     <nav id="nav"></nav>
-    <div style="padding:12px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center">
-      <div style="flex:1;min-width:0"><div id="who" style="font-size:13px">—</div><div class="muted" style="font-size:11px" id="whoRole">—</div></div>
-      <button class="btn" style="background:none;color:var(--muted);padding:6px" onclick="logout()" title="Гарах">⏻</button>
+    <div class="nav-foot">
+      <div class="u"><div class="uav" id="uAv">—</div><div class="ux" style="min-width:0"><div id="who" style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div><div class="muted" style="font-size:11px" id="whoRole">—</div></div></div>
+      <div class="fbtns" id="footBtns"></div>
     </div>
   </aside>
   <main>
@@ -363,20 +393,32 @@ function pages(){let p=[...BASE_PAGES];
   if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥'],['perms','Эрхийн тохиргоо','🛡️'],['audit','Аудит бүртгэл','📜']);return p;}
 let CUR='dash';
 function go(p){CUR=p;document.getElementById('side').classList.remove('open');renderNav();render();}
-const NAV_GROUPS=[
-  {n:'Нүүр & Мэдээ',keys:['dash','notifs','daily','news']},
-  {n:'Ажил / Гэмтэл',keys:['new','wo2','faults','work']},
-  {n:'Тоног & Засвар',keys:['equip','loto','inspect','parts','reliab']},
-  {n:'Эрчим хүч',keys:['energy']},
-  {n:'Хүний нөөц',keys:['hr','attend','roster','eng']},
-  {n:'Тайлан & QR',keys:['rptcenter','report','qr']},
-  {n:'Систем / Тохиргоо',keys:['ref','users','perms','audit']},
+/* ==== Sidebar config — шинэ цэс нэмэхэд энэ массивт нэг мөр нэмнэ ==== */
+const NAV_MENU=[
+  {id:'ctl', gico:'📊', label:'Хяналт', items:[['dash','Dashboard','📊'],['notifs','Мэдэгдэл','🔔'],['news','Шинэ мэдээ','📰']]},
+  {id:'work', gico:'🛠', label:'Ажил ба тайлан', items:[['daily','Өдөр тутмын тайлан','📄'],['new','Гэмтэл бүртгэх','⚡'],['wo2','Work Order','📋'],['faults','Цахилгааны гэмтэл','⚠️'],['work','Ажлын түүх','🕘']]},
+  {id:'eqp', gico:'🏭', label:'Тоног төхөөрөмж ба засвар', items:[['equip','Тоног төхөөрөмж','⚙️'],['inspect','Үзлэг (QR)','📱'],['loto','LOTO','🔒'],['parts','Сэлбэгийн нөөц','📦'],['reliab','Найдвартай ажиллагаа','📈']]},
+  {id:'en', gico:'⚡', label:'Эрчим хүч', items:[['energy','Эрчим хүчний хэрэглээ','🔋']]},
+  {id:'hr', gico:'👷', label:'Хүний нөөц', items:[['hr','Ээлж','👥'],['attend','Цаг бүртгэл','🕒'],['roster','Ээлжийн төлөвлөлт','🗓️']]},
+  {id:'sys', gico:'⚙️', label:'Тайлан & Систем', items:[['qr','QR кодууд','🔲'],['rptcenter','Тайлан төв','📑'],['report','Тайлан / Дүгнэлт','📅'],['eng','Инженерийн гүйцэтгэл','📊'],['ref','Лавлах / Тохиргоо','⚙️'],['users','Хэрэглэгчид','👥'],['perms','Эрхийн тохиргоо','🛡️'],['audit','Аудит','📜']]},
 ];
-function renderNav(){const un=myUnread();const avail=pages();const byKey={};avail.forEach(p=>byKey[p[0]]=p);const used={};let html='';
-  const link=(k,l,ic)=>{const badge=(k==='notifs'&&un>0)?` <span class="badge b-danger" style="font-size:10px">${un}</span>`:'';return `<a class="${CUR===k?'active':''}" onclick="go('${k}')">${ic} ${esc(l)}${badge}</a>`;};
-  NAV_GROUPS.forEach(g=>{const items=g.keys.filter(k=>byKey[k]);if(!items.length)return;html+=`<div class="navgrp">${esc(g.n)}</div>`;items.forEach(k=>{used[k]=1;html+=link(k,byKey[k][1],byKey[k][2]);});});
-  const rest=avail.filter(p=>!used[p[0]]);if(rest.length){html+='<div class="navgrp">Бусад</div>';rest.forEach(p=>{html+=link(p[0],p[1],p[2]);});}
+const NAV_OPEN_DEFAULT={ctl:true,work:false,eqp:true,en:false,hr:false,sys:false};
+function navOpenState(){if(!window._navOpen){try{window._navOpen=JSON.parse(localStorage.getItem('navOpen'))||null;}catch(e){}if(!window._navOpen)window._navOpen=Object.assign({},NAV_OPEN_DEFAULT);}return window._navOpen;}
+function toggleNavGroup(id){const s=navOpenState();s[id]=!s[id];localStorage.setItem('navOpen',JSON.stringify(s));renderNav();}
+function toggleNavCol(){document.body.classList.toggle('navcol');localStorage.setItem('navcol',document.body.classList.contains('navcol')?'1':'0');}
+const QUICK_ACTIONS=[['wo2','➕','Шинэ Work Order'],['new','⚡','Гэмтэл бүртгэх'],['inspect','📱','QR Үзлэг хийх'],['loto','🔒','LOTO үүсгэх']];
+function renderNav(){const un=myUnread();const avail=pages();const byKey={};avail.forEach(p=>byKey[p[0]]=p);const open=navOpenState();
+  const link=(k,lbl,ic)=>{const badge=(k==='notifs'&&un>0)?`<span class="nbadge">${un}</span>`:'';return `<a class="${CUR===k?'active':''}" onclick="go('${k}')" title="${esc(lbl)}"><span class="ico">${ic}</span><span class="lbl">${esc(lbl)}</span>${badge}</a>`;};
+  let html='';
+  NAV_MENU.forEach(g=>{const items=g.items.filter(it=>byKey[it[0]]);if(!items.length)return;const isOpen=open[g.id]!==false;
+    html+=`<button class="navgrp-h ${isOpen?'':'closed'}" onclick="toggleNavGroup('${g.id}')"><span class="gico">${g.gico}</span><span class="lbl">${esc(g.label)}</span><span class="chev">▼</span></button>
+      <div class="navgrp-items ${isOpen?'':'closed'}">${items.map(it=>link(it[0],it[1],it[2])).join('')}</div>`;});
   document.getElementById('nav').innerHTML=html;
+  // Quick actions
+  const qa=document.getElementById('qaBar');if(qa)qa.innerHTML=QUICK_ACTIONS.filter(a=>byKey[a[0]]).map(a=>`<button class="qa" onclick="go('${a[0]}')" title="${esc(a[2])}">${a[1]}</button>`).join('');
+  // Footer
+  const fb=document.getElementById('footBtns');if(fb){const canRef=!!byKey['ref'];fb.innerHTML=(canRef?`<button class="fbtn" onclick="go('ref')" title="Тохиргоо">⚙️ <span class="lbl">Тохиргоо</span></button>`:'')+`<button class="fbtn" onclick="logout()" title="Гарах">🚪 <span class="lbl">Гарах</span></button>`;}
+  const av=document.getElementById('uAv');if(av&&ME)av.textContent=(ME.name||'?').trim().charAt(0).toUpperCase();
   document.getElementById('title').textContent=(avail.find(p=>p[0]===CUR)||['','Нүүр'])[1];}
 
 /* ============ Render ============ */
@@ -2151,6 +2193,7 @@ function logout(){localStorage.removeItem('tk');TOKEN=null;ME=null;location.relo
 function startApp(){document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('who').textContent=ME.name;document.getElementById('whoRole').textContent=roleLabel(ME.role);
+  if(localStorage.getItem('navcol')==='1')document.body.classList.add('navcol');
   applyTheme();startNotifPoll();
   renderNav();renderPresets();syncDates();render();
   try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd'),wo=sp.get('wo');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}else if(wo){go('wo2');setTimeout(()=>{const w=woFind(+wo);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},300);}}catch(e){}}
