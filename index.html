@@ -179,14 +179,14 @@ const PERMS=[
  ['wo_edit','Work Order засах / төлөв'],['wo_close','Work Order хаах / батлах'],['wo_delete','Work Order устгах'],
  ['fault_create','Гэмтэл бүртгэх'],['energy_create','Эрчим хүч бүртгэх'],['iso_create','Тусгаарлалт / LOTO хийх'],
  ['iso_view','Тусгаарлалт бүртгэх'],['parts_edit','Сэлбэг засах'],['attend_view','Цаг бүртгэл харах'],['attend_edit','Цаг бүртгэл засах'],
- ['report_view','Тайлан харах'],['settings','Тохиргоо / Лавлах'],['user_manage','Хэрэглэгч удирдах']
+ ['report_view','Тайлан харах'],['news_post','Шинэ мэдээ нийтлэх'],['settings','Тохиргоо / Лавлах'],['user_manage','Хэрэглэгч удирдах']
 ];
 const DEFAULT_PERMS={
  ADMIN:'*',
- CHIEF:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','attend_edit','report_view','settings'],
- MASTER:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','report_view','settings'],
+ CHIEF:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','attend_edit','report_view','news_post','settings'],
+ MASTER:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','report_view','news_post','settings'],
  EE:['dash_view','wo_view','wo_edit','fault_create','energy_create','parts_edit','report_view','settings'],
- AUTO_CHIEF:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','report_view','settings'],
+ AUTO_CHIEF:['dash_view','wo_view','wo_create','wo_edit','wo_close','fault_create','energy_create','iso_create','iso_view','parts_edit','attend_view','report_view','news_post','settings'],
  AUTO_EE:['dash_view','wo_view','wo_create','wo_edit','fault_create','energy_create','parts_edit','report_view','settings'],
  AUTO_TECH:['dash_view','wo_view','fault_create','report_view'],
  ISO_TECH:['dash_view','wo_view','fault_create','iso_create','iso_view','report_view'],
@@ -311,7 +311,7 @@ function kpis(){
     unplanned:wos.filter(w=>isUnplanned(w.type)).length,faults:faults.length,activeFaults:wos.filter(isActiveFault).length,byStatus,
     emergency:wos.filter(w=>w.type==='Шуурхай дуудлага').length,
     open:wos.filter(w=>!isClosed(w.status)).length,critical:wos.filter(w=>w.prio==='Эгзэгтэй'&&!isClosed(w.status)).length,
-    isoStd:(DB.loto||[]).filter(x=>x.type==='Стандарт').length,isoGrp:(DB.loto||[]).filter(x=>x.type==='Групп').length,
+    isoStd:(DB.loto||[]).filter(x=>lotoInRange(x)&&x.type==='Стандарт').length,isoGrp:(DB.loto||[]).filter(x=>lotoInRange(x)&&x.type==='Групп').length,
     down:totalDown,mttr:Math.round(mttr),mtbf:Math.round(mtbf),avail:Math.round(avail*100)/100,workHours,
     completion:wos.length?Math.round(done/wos.length*100):0,unitEnergy:unitEnergy(totEn,totFeed),totFeed,totEn};
 }
@@ -764,7 +764,23 @@ function importPdAsEquip(){if(!ME||ME.role!=='ADMIN'){toast('Зөвхөн адм
   pds.forEach(p=>{p=String(p).trim();if(!p||have.has(p))return;
     DB.equip.push({tag:p,name:'PD '+p,pd:p,cat:'PD',area:'',crit:'Дунд',insKind:'PD',insFreq:0,insStart:iso(new Date())});have.add(p);added++;});
   save();audit('PD тоног импортлов',added+' PD');toast(added+' PD тоног үүслээ ✓ (PD ангиллаас харна)');window._eqKind='PD';render();}
+// PD дугаарыг багц болгон бүлэглэх түлхүүр: "11PD-01" → "PD11", "31PD-LVIC" → "PD31"
+function pdGroupKey(tag){const t=String(tag||'');let m=t.match(/(\d+)\s*PD/i);if(m)return 'PD'+m[1];m=t.match(/PD\s*(\d+)/i);if(m)return 'PD'+m[1];return 'Бусад PD';}
+function eqInsCell(e){const nd=nextDueOf(e),dl=daysUntil(nd);
+  return (+e.insFreq>0)?`<span class="badge ${dl<=0?'b-danger':dl<=3?'b-warn':'b-ok'}">${e.insFreq}хон · ${dl<=0?(dl<0?Math.abs(dl)+'ө хэтэрсэн':'өнөөдөр'):dl+'ө үлдсэн'}</span>`:'<span class="muted" style="font-size:11px">—</span>';}
 function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
+  // PD шүүлтүүр идэвхтэй бол багцлан харуулна (PD11 → 11PD-01 ... 11PD-LVIC)
+  if((window._eqKind)==='PD'){const groups={};list.forEach(e=>{const k=pdGroupKey(e.tag);(groups[k]=groups[k]||[]).push(e);});
+    const keys=Object.keys(groups).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+    return `<div class="muted" style="font-size:12px;margin-bottom:8px">${list.length} PD · ${keys.length} багц</div>`+
+      keys.map(k=>`<details class="glass card" style="margin-bottom:8px" open><summary style="cursor:pointer;font-weight:700;font-size:14px;padding:4px 2px">🔌 ${esc(k)} <span class="badge b-accent" style="margin-left:6px">${groups[k].length}</span></summary>
+        <div style="overflow:auto"><table style="margin-top:8px"><thead><tr><th>PD дугаар (TAG)</th><th>Нэр</th><th>🔁 Үзлэг</th><th>Эгзэгтэй</th><th>Үйлдэл</th></tr></thead><tbody>
+        ${groups[k].sort((a,b)=>a.tag.localeCompare(b.tag,undefined,{numeric:true})).map(e=>{const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
+          return `<tr><td><a onclick="openPdPassport('${esc(e.tag)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline;font-family:monospace">${esc(e.tag)}</a></td>
+          <td>${esc(e.name)||'—'}</td><td style="white-space:nowrap">${eqInsCell(e)} <button class="ic" title="Үзлэгийн давтамж" onclick="setInsFreq('${esc(e.tag)}')">🔁</button></td>
+          <td><span class="badge ${tb}">${esc(e.crit)}</span></td>
+          <td style="white-space:nowrap"><button class="ic" title="QR хэвлэх" onclick="showPdQR('${esc(e.tag)}')">🔲</button><button class="ic" title="TAG болгох" onclick="toggleEqKind('${esc(e.tag)}')">⇄</button>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')}
+        </tbody></table></div></details>`).join('')||'<div class="muted" style="padding:16px">PD алга — "🔌 PD жагсаалтаас татах" дарж үүсгэнэ үү.</div>';}
   return `<div class="muted" style="font-size:12px;margin-bottom:8px">${list.length} тоног төхөөрөмж${list.length>300?' (эхний 300 харуулж байна, хайлт нарийсгана уу)':''}</div>
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>TAG</th><th>Нэр</th><th>PD</th><th>Байршил</th><th>Ангилал</th><th>🔁 Үзлэг</th><th>Эгзэгтэй</th><th>Гэмтэл</th><th></th></tr></thead>
@@ -1897,9 +1913,11 @@ function lotoControls(w){if(!canLoto())return '';const b=[];const nx=lotoNext[w.
   if(nx)b.push(`<button class="btn btn-sm" onclick="lotoSet(${w.id},'${nx}')">${lotoLabel[nx]} →</button>`);
   if(w.status!=='Released'&&w.status!=='Archived'&&w.status!=='Cancelled')b.push(`<button class="btn btn-sm btn-ghost" onclick="lotoSet(${w.id},'Cancelled')">✖</button>`);
   return b.join(' ');}
-function viewLoto(){ensureLoto();const list=[...DB.loto].sort((a,b)=>(a.status==='Archived')-(b.status==='Archived')||(a.requestedAt<b.requestedAt?1:-1));
-  const cnt=s=>DB.loto.filter(x=>x.status===s).length;const active=DB.loto.filter(x=>['Applied','Verified'].includes(x.status)).length;
-  const std=DB.loto.filter(x=>x.type==='Стандарт').length,grp=DB.loto.filter(x=>x.type==='Групп').length;
+function lotoDate(w){return (w.requestedAt||w.appliedAt||w.createdAt||'').slice(0,10);}
+function lotoInRange(w){const d=lotoDate(w);return !d||(d>=RANGE.from&&d<=RANGE.to);}
+function viewLoto(){ensureLoto();const L=DB.loto.filter(lotoInRange);const list=[...L].sort((a,b)=>(a.status==='Archived')-(b.status==='Archived')||(a.requestedAt<b.requestedAt?1:-1));
+  const cnt=s=>L.filter(x=>x.status===s).length;const active=L.filter(x=>['Applied','Verified'].includes(x.status)).length;
+  const std=L.filter(x=>x.type==='Стандарт').length,grp=L.filter(x=>x.type==='Групп').length;
   const ENERGY=['Цахилгаан','Механик','Гидравлик','Пневматик','Дулаан','Хий','Бусад'];
   const rows=list.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:11px">${esc(w.no)}</td>
     <td><b>${esc(w.equip||w.pd)||'—'}</b>${w.point?'<div class="muted" style="font-size:11px">Цэг: '+esc(w.point)+'</div>':''}${(w.photos&&w.photos.length)?'<div style="margin-top:3px">'+photoThumbs(w.photos)+'</div>':''}</td>
@@ -1911,7 +1929,8 @@ function viewLoto(){ensureLoto();const list=[...DB.loto].sort((a,b)=>(a.status==
     <td style="white-space:nowrap">${lotoControls(w)} ${canDelete()?delBtn('delLoto('+w.id+')'):''}</td></tr>`).join('');
   return `${dataListEquip()}${dataListPd()}
     <div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px">
-      ${kpiCard('Нийт',DB.loto.length,'accent')}${kpiCard('Идэвхтэй (тавьсан)',active,'danger')}${kpiCard('Стандарт',std,'teal')}${kpiCard('Групп',grp,'warn')}${kpiCard('Чөлөөлсөн',cnt('Released'),'ok')}${kpiCard('Хүсэлт',cnt('Requested'),'muted')}</div>
+      ${kpiCard('Нийт',L.length,'accent',RANGE.from+' — '+RANGE.to)}${kpiCard('Идэвхтэй (тавьсан)',active,'danger')}${kpiCard('Стандарт',std,'teal')}${kpiCard('Групп',grp,'warn')}${kpiCard('Чөлөөлсөн',cnt('Released'),'ok')}${kpiCard('Архивласан',cnt('Archived'),'muted')}</div>
+    <div class="note" style="margin-bottom:12px">📅 Зөвхөн сонгосон хугацааны (${RANGE.from} — ${RANGE.to}) бүртгэл харагдана.</div>
     <div class="grid col2" style="margin-bottom:16px">
       <div class="glass card"><div class="section-title">🔒 Төрлөөр</div><canvas id="loPie" height="150"></canvas></div>
       <div class="glass card"><div class="section-title">📊 Төлөвөөр</div><canvas id="loBar" height="150"></canvas></div></div>
@@ -1933,9 +1952,9 @@ function viewLoto(){ensureLoto();const list=[...DB.loto].sort((a,b)=>(a.status==
       <table><thead><tr><th>№</th><th>Тоног / Цэг</th><th>Төрөл</th><th>Lock/Tag</th><th>Эрчмийн эх</th><th>Хийсэн</th><th>Төлөв</th><th>Үйлдэл</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="8" class="muted" style="text-align:center;padding:18px">Бүртгэл алга.</td></tr>'}</tbody></table></div>`;}
 let lotoCharts=[];
-function drawLotoCharts(){lotoCharts.forEach(c=>c.destroy());lotoCharts=[];if(!DB.loto)return;
-  const std=DB.loto.filter(x=>x.type==='Стандарт').length,grp=DB.loto.filter(x=>x.type==='Групп').length;
-  const sc=LOTO_STATES.map(s=>DB.loto.filter(x=>x.status===s).length);
+function drawLotoCharts(){lotoCharts.forEach(c=>c.destroy());lotoCharts=[];if(!DB.loto)return;const L=DB.loto.filter(lotoInRange);
+  const std=L.filter(x=>x.type==='Стандарт').length,grp=L.filter(x=>x.type==='Групп').length;
+  const sc=LOTO_STATES.map(s=>L.filter(x=>x.status===s).length);
   const pe=document.getElementById('loPie'),ba=document.getElementById('loBar');if(!pe||!ba)return;
   lotoCharts.push(new Chart(pe,{type:'doughnut',data:{labels:['Стандарт','Групп'],datasets:[{data:[std,grp],backgroundColor:['#1ec8c8','#ffb020']}]},options:{responsive:true,plugins:{legend:{labels:{color:'#8ea2c0'}}}}}));
   lotoCharts.push(new Chart(ba,{type:'bar',data:{labels:LOTO_STATES.map(s=>lotoLabel[s]),datasets:[{label:'Тоо',data:sc,backgroundColor:'#2e8bff'}]},options:baseOpts({plugins:{legend:{display:false}}})}));}
@@ -2051,7 +2070,7 @@ function dailySummaryPanel(){const d=iso(new Date());const r=dailyReport(d);
   return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">📅 Өнөөдрийн ажлын товч (авто) <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="go('daily')">Дэлгэрэнгүй →</button></div>
     <div style="font-size:14px;line-height:2">Хаагдсан WO: <b class="t-ok">${r.woClosed}</b> · Засварласан гэмтэл: <b class="t-danger">${r.faultsFixed}</b> · Үзлэг: <b class="t-accent">${r.inspDone}</b> хийсэн / <b class="t-danger">${r.notInsp}</b> үлдсэн · LOTO: <b>${r.lotoStd}</b> станд / <b>${r.lotoGrp}</b> групп · PM: <b class="t-teal">${r.pm}</b></div></div>`;}
 /* ---- Шинэ мэдээ (онцлох мэдээллийн самбар) ---- */
-const canPostNews=()=>ME&&['ADMIN','CHIEF','AUTO_CHIEF'].includes(ME.role);
+const canPostNews=()=>can('news_post');
 const NEWS_CAT=['Онцлох ажил','Аюулгүй ажиллагаа','Шинэ тоног','Сургалт','Шагнал/Урамшуулал','Их засвар','Шуурхай мэдээ'];
 function addNews(e){e.preventDefault();if(!canPostNews()){toast('Зөвхөн ахлах/админ нийтэлнэ');return;}if(!DB.news)DB.news=[];if(!DB.seq.news)DB.seq.news=0;
   DB.news.push({id:++DB.seq.news,title:val('nw_title').trim(),body:val('nw_body').trim(),cat:val('nw_cat'),by:ME?ME.name:'',ts:new Date().toISOString().slice(0,16).replace('T',' ')});
