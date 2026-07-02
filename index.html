@@ -209,7 +209,10 @@ const PERMS=[
  ['wo_edit','Work Order засах / төлөв'],['wo_close','Work Order хаах / батлах'],['wo_delete','Work Order устгах'],
  ['fault_create','Гэмтэл бүртгэх'],['energy_create','Эрчим хүч бүртгэх'],['iso_create','Тусгаарлалт / LOTO хийх'],
  ['iso_view','Тусгаарлалт бүртгэх'],['parts_edit','Сэлбэг засах'],['attend_view','Цаг бүртгэл харах'],['attend_edit','Цаг бүртгэл засах'],
- ['report_view','Тайлан харах'],['news_post','Шинэ мэдээ нийтлэх'],['settings','Тохиргоо / Лавлах'],['user_manage','Хэрэглэгч удирдах']
+ ['report_view','Тайлан харах'],['news_post','Шинэ мэдээ нийтлэх'],
+ ['equip_view','Цэс: Тоног төхөөрөмж'],['inspect_view','Цэс: Үзлэг (QR)'],['loto_view','Цэс: LOTO'],['parts_view','Цэс: Сэлбэгийн нөөц'],
+ ['reliab_view','Цэс: Найдвартай ажиллагаа'],['qr_view','Цэс: QR кодууд'],['eng_view','Цэс: Инженерийн гүйцэтгэл'],['energy_view','Цэс: Эрчим хүчний хэрэглээ'],
+ ['settings','Тохиргоо / Лавлах'],['user_manage','Хэрэглэгч удирдах']
 ];
 const DEFAULT_PERMS={
  ADMIN:'*',
@@ -224,6 +227,11 @@ const DEFAULT_PERMS={
  ELEC_ASST:['dash_view','wo_view','fault_create','report_view'],
  VIEWER:['dash_view','wo_view','report_view']
 };
+// Цэс-харах эрхүүдийг ажлын бүх албан тушаалд өгөгдмөлөөр нээнэ (админ дараа нь хааж болно)
+(function(){const VP=['equip_view','inspect_view','loto_view','parts_view','reliab_view','qr_view','eng_view','energy_view'];
+  ['CHIEF','MASTER','EE','AUTO_CHIEF','AUTO_EE','AUTO_TECH','ISO_TECH','ELEC','ELEC_ASST'].forEach(r=>{VP.forEach(p=>{if(DEFAULT_PERMS[r]&&!DEFAULT_PERMS[r].includes(p))DEFAULT_PERMS[r].push(p);});});
+  ['reliab_view','energy_view'].forEach(p=>{if(!DEFAULT_PERMS.VIEWER.includes(p))DEFAULT_PERMS.VIEWER.push(p);});})();
+const PAGE_PERM={equip:'equip_view',inspect:'inspect_view',loto:'loto_view',parts:'parts_view',reliab:'reliab_view',qr:'qr_view',eng:'eng_view',energy:'energy_view',rptcenter:'report_view',report:'report_view'};
 function rolePerms(role){const p=(typeof DB!=='undefined'&&DB&&DB.perms&&DB.perms[role]);if(p)return p;const d=DEFAULT_PERMS[role];return d==='*'?'*':(d||[]);}
 function can(perm){if(!ME)return false;if(ME.role==='ADMIN')return true;const rp=rolePerms(ME.role);return rp==='*'?true:rp.includes(perm);}
 const canSeeAttend=()=>can('attend_view');
@@ -389,6 +397,7 @@ const BASE_PAGES=[
 ];
 function pages(){let p=[...BASE_PAGES];
   if(!canSeeRef())p=p.filter(x=>x[0]!=='ref');
+  p=p.filter(x=>{const pm=PAGE_PERM[x[0]];return !pm||can(pm);});   // цэс тус бүрийг эрхийн тохиргоогоор шүүнэ
   if(canSeeAttend()){const i=p.findIndex(x=>x[0]==='hr');const ins=[['attend','Цаг бүртгэл','🕒']];if(canEditAttend())ins.push(['roster','Ээлжийн төлөвлөлт','🗓️']);p.splice(i>=0?i+1:p.length,0,...ins);}
   if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥'],['perms','Эрхийн тохиргоо','🛡️'],['audit','Аудит бүртгэл','📜']);return p;}
 let CUR='dash';
@@ -1932,7 +1941,12 @@ function viewWO2(){if(!DB.naryad)DB.naryad=[];ensureStaff();window._woEquips=[];
       <table><thead><tr><th>Ажилтан</th><th>Дуусгасан</th><th>Хугацаандаа %</th><th>Дундаж мин</th><th>Нийт мин</th><th>KPI оноо</th></tr></thead>
       <tbody>${kArr.map((t,i)=>`<tr><td>${i===0?'🏆 ':''}${esc(t.name)}</td><td style="text-align:center">${t.done}</td><td style="text-align:center" class="${t.onPct>=80?'t-ok':t.onPct>=50?'t-warn':'t-danger'}">${t.onPct}%</td><td style="text-align:center">${t.avg}</td><td style="text-align:center">${t.minutes}</td><td style="text-align:center"><span class="badge ${t.score>=80?'b-ok':t.score>=50?'b-warn':'b-danger'}">${t.score}</span></td></tr>`).join('')||'<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">Дууссан наряд алга — KPI бодогдоогүй.</td></tr>'}</tbody></table></div>`;}
 /* ---- Эрхийн матриц (Админ) ---- */
-function ensurePerms(){if(!DB.perms)DB.perms={};ROLES.forEach(r=>{if(r[0]==='ADMIN')return;if(!DB.perms[r[0]]){const d=DEFAULT_PERMS[r[0]];DB.perms[r[0]]=(d&&d!=='*')?d.slice():[];}});}
+function ensurePerms(){if(!DB.perms)DB.perms={};ROLES.forEach(r=>{if(r[0]==='ADMIN')return;if(!DB.perms[r[0]]){const d=DEFAULT_PERMS[r[0]];DB.perms[r[0]]=(d&&d!=='*')?d.slice():[];}});
+  // Migration: өмнө нь хадгалагдсан эрхэд шинэ цэс-харах эрхүүдийг өгөгдмөлөөр нэг удаа нэмнэ (одоогийн харагдацыг хадгална)
+  if(!DB.permsMig2){const NEWV=['equip_view','inspect_view','loto_view','parts_view','reliab_view','qr_view','eng_view','energy_view','news_post'];
+    ROLES.forEach(r=>{if(r[0]==='ADMIN')return;const cur=DB.perms[r[0]];if(!Array.isArray(cur))return;const def=DEFAULT_PERMS[r[0]]||[];
+      NEWV.forEach(pv=>{if(!cur.includes(pv)&&def.includes(pv))cur.push(pv);});});
+    DB.permsMig2=true;save();}}
 function togglePerm(role,perm,on){if(!ME||ME.role!=='ADMIN'){toast('Зөвхөн админ');return;}ensurePerms();
   const arr=DB.perms[role]||(DB.perms[role]=[]);const i=arr.indexOf(perm);
   if(on&&i<0)arr.push(perm);if(!on&&i>=0)arr.splice(i,1);
@@ -2194,6 +2208,7 @@ function startApp(){document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('who').textContent=ME.name;document.getElementById('whoRole').textContent=roleLabel(ME.role);
   if(localStorage.getItem('navcol')==='1')document.body.classList.add('navcol');
+  try{ensurePerms();}catch(e){}
   applyTheme();startNotifPoll();
   renderNav();renderPresets();syncDates();render();
   try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd'),wo=sp.get('wo');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}else if(wo){go('wo2');setTimeout(()=>{const w=woFind(+wo);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},300);}}catch(e){}}
