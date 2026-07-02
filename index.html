@@ -614,7 +614,7 @@ function viewNew(){window._newPhotos=[];return `${dataListEquip()}${dataListPd()
         <label class="field"><span>Action Taken</span><input id="w_action"></label></div>
     </div>
     <label class="field" style="grid-column:span 3;margin-top:6px"><span>📷 Зураг хавсаргах (камер / файл — олон зураг)</span>
-      <input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)">
+      <input type="file" accept="image/*" multiple onchange="handlePhotos(this)">
       <div id="photoPrev" style="margin-top:6px"></div></label>
     <div class="note" style="margin-top:12px">Авто тооцоо: Downtime = <b id="downPrev">— (Start/Finish оруулна уу)</b> · Эгзэгтэй/Өндөр гэмтэл бол Telegram мэдэгдэл илгээнэ.</div>
   </div>
@@ -1210,7 +1210,7 @@ function quickCheckForm(target,kind){window._newPhotos=[];const eq=kind==='equip
       <label class="field" id="qc_dw" style="display:none"><span>Гэмтлийн тайлбар</span><input id="qc_fdesc" placeholder="юу эвдэрсэн бэ"></label>
     </div>
     <label class="field" style="margin-top:10px"><span>Тайлбар</span><input id="qc_note"></label>
-    <div class="field" style="margin-top:10px"><span>📷 Зураг хавсаргах</span><input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></div>
+    <div class="field" style="margin-top:10px"><span>📷 Зураг хавсаргах</span><input type="file" accept="image/*" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></div>
     <div style="margin-top:12px"><button class="btn">Үзлэг хадгалах</button>
       <span class="muted" style="font-size:12px;margin-left:10px">Гэмтэлтэй бол "Цахилгааны гэмтэл"-д бүртгэгдэж, Telegram-д мэдэгдэнэ.</span></div></form></div>`;}
 async function saveQuickCheck(e,target,kind){e.preventDefault();
@@ -1793,7 +1793,7 @@ function woComplete(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){t
   o.innerHTML=`<div class="glass card" style="max-width:520px;width:100%;max-height:90vh;overflow:auto">
     <div class="section-title">✅ Ажил дуусгах — ${esc(w.no)} <span class="muted" style="margin-left:auto;font-size:12px">хугацаа: ${woWorked(w)} мин</span></div>
     <label class="field"><span>Дууссан тухай тайлбар</span><textarea id="wo_cnote" rows="2" placeholder="юу хийсэн бэ"></textarea></label>
-    <label class="field" style="margin-top:8px"><span>📷 Зураг хавсаргах</span><input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></label>
+    <label class="field" style="margin-top:8px"><span>📷 Зураг хавсаргах</span><input type="file" accept="image/*" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></label>
     <div class="field" style="margin-top:8px"><span>Ашигласан сэлбэг</span>
       <div style="display:flex;gap:6px;margin-top:4px"><select id="wo_part" style="flex:1">${partsOpts||'<option value="">— сэлбэг алга —</option>'}</select>
         <input id="wo_pqty" type="number" step="0.01" value="1" style="width:80px"><button type="button" class="btn btn-sm" onclick="woAddPartRow()">+</button></div>
@@ -2048,7 +2048,7 @@ function viewLoto(){ensureLoto();const L=DB.loto.filter(lotoInRange);const list=
         <label class="field"><span>Tag № (пайз)</span><input id="lo_tag" placeholder="ж: T-014"></label>
         <label class="field"><span>Тусгаарлах цэг</span><input id="lo_point" placeholder="ж: QF1 таслуур"></label>
         <label class="field" style="grid-column:span 2"><span>Тэмдэглэл</span><input id="lo_note"></label>
-        <label class="field"><span>📷 Зураг</span><input type="file" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)"></label>
+        <label class="field"><span>📷 Зураг</span><input type="file" accept="image/*" multiple onchange="handlePhotos(this)"></label>
       </div><div id="photoPrev" style="margin-top:6px"></div>
       <div style="margin-top:10px"><button class="btn">Бүртгэх</button>
         <span class="muted" style="font-size:12px;margin-left:8px">Урсгал: Хүсэлт → Бэлтгэсэн → Тавьсан → Баталгаажуулсан → Чөлөөлсөн → Архив</span></div></form></div>`:''}
