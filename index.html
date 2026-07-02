@@ -751,8 +751,11 @@ function isoStatusCell(i){const st=isoStatus(i);const sb={'Тусгаарлас�
 function setIsoStatus(id,val){const i=DB.isolations.find(x=>x.id===id);if(!i)return;i.status=val;save();toast('Тусгаарлалтын төлөв шинэчлэгдлээ ✓');render();}
 
 /* ---- Тоног төхөөрөмж ---- */
-function eqFiltered(){const q=(window._eq||'').toLowerCase();
-  return q?DB.equip.filter(e=>[e.tag,e.name,e.pd,e.area,e.cat].join(' ').toLowerCase().includes(q)):DB.equip;}
+function eqFiltered(){const q=(window._eq||'').toLowerCase();const kind=window._eqKind||'ALL';
+  let list=DB.equip;if(kind!=='ALL')list=list.filter(e=>equipKind(e)===kind);
+  return q?list.filter(e=>[e.tag,e.name,e.pd,e.area,e.cat].join(' ').toLowerCase().includes(q)):list;}
+function setEqKind(k){window._eqKind=k;render();}
+function toggleEqKind(tag){const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)return;e.insKind=equipKind(e)==='PD'?'TAG':'PD';save();audit('Тоногийн ангилал',tag+' → '+e.insKind);render();}
 function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
   return `<div class="muted" style="font-size:12px;margin-bottom:8px">${list.length} тоног төхөөрөмж${list.length>300?' (эхний 300 харуулж байна, хайлт нарийсгана уу)':''}</div>
   <div class="glass card" style="padding:0;overflow:auto"><table>
@@ -762,7 +765,7 @@ function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
       const nd=nextDueOf(e),dl=daysUntil(nd);
       const insCell=(+e.insFreq>0)?`<span class="badge ${dl<=0?'b-danger':dl<=3?'b-warn':'b-ok'}">${e.insFreq}хон · ${dl<=0?(dl<0?Math.abs(dl)+'ө хэтэрсэн':'өнөөдөр'):dl+'ө үлдсэн'}</span>`:'<span class="muted" style="font-size:11px">—</span>';
       return `<tr><td class="t-accent" style="font-family:monospace;cursor:pointer;text-decoration:underline" title="Паспорт нээх" onclick="openPassport('${esc(e.tag)}')">${esc(e.tag)}</td><td>${esc(e.name)}</td><td class="muted" style="font-family:monospace;font-size:12px">${esc(e.pd)||'—'}</td><td class="muted">${esc(e.area)||'—'}</td>
-      <td>${esc(e.cat)||'—'} <span class="badge b-muted" style="font-size:10px">${equipKind(e)}</span></td><td style="white-space:nowrap">${insCell} <button class="ic" title="Үзлэгийн давтамж тохируулах" onclick="setInsFreq('${esc(e.tag)}')">🔁</button></td>
+      <td>${esc(e.cat)||'—'} <span class="badge ${equipKind(e)==='PD'?'b-accent':'b-muted'}" style="font-size:10px;cursor:pointer" title="Дарж TAG↔PD солино" onclick="toggleEqKind('${esc(e.tag)}')">${equipKind(e)} ⇄</span></td><td style="white-space:nowrap">${insCell} <button class="ic" title="Үзлэгийн давтамж тохируулах" onclick="setInsFreq('${esc(e.tag)}')">🔁</button></td>
       <td><span class="badge ${tb}">${esc(e.crit)}</span></td><td>${f}</td>
       <td style="white-space:nowrap"><button class="ic" title="QR хэвлэх" onclick="showEqQR('${esc(e.tag)}')">🔲</button>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')||'<tr><td colspan="9" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж олдсонгүй.</td></tr>'}</tbody></table></div>`;}
 function refreshEq(v){window._eq=v;document.getElementById('eqResults').innerHTML=eqResultsHTML();}
@@ -783,8 +786,9 @@ function viewEquip(){
       <label class="field"><span>Сериал №</span><input id="e_serial" placeholder="serial number"></label>
       <label class="field"><span>Баталгаат хугацаа дуусах</span><input type="date" id="e_warranty"></label>
       <div style="grid-column:span 2;display:flex;align-items:end"><button class="btn">Нэмэх</button></div></div></form></div>
-  <div class="glass card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center">
-    🔍 <input id="eq" value="${esc(window._eq||'')}" placeholder="TAG, нэр, PD-аар хайх…" oninput="refreshEq(this.value)">
+  <div class="glass card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <b style="font-size:13px">🗂️ Ангилал:</b><div class="seg">${[['ALL','Бүгд'],['TAG','TAG'],['PD','PD']].map(([k,l])=>{const cnt=k==='ALL'?(DB.equip||[]).length:(DB.equip||[]).filter(e=>equipKind(e)===k).length;return `<button class="${(window._eqKind||'ALL')===k?'on':''}" onclick="setEqKind('${k}')">${l} (${cnt})</button>`;}).join('')}</div>
+    🔍 <input id="eq" value="${esc(window._eq||'')}" placeholder="TAG, нэр, PD-аар хайх…" oninput="refreshEq(this.value)" style="flex:1;min-width:180px">
     <button class="btn btn-sm btn-ghost" onclick="go('qr')">🔲 QR кодууд</button>
     <button class="btn btn-sm btn-ghost" onclick="exportEquip()">📤 Excel</button></div>
   <div id="eqResults">${eqResultsHTML()}</div>`;}
