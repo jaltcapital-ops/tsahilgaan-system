@@ -387,7 +387,7 @@ function render(){const v=document.getElementById('view');
   else if(CUR==='work'){v.innerHTML=viewWork();renderWorkTable();}
   else if(CUR==='iso'){v.innerHTML=viewIso();drawIsoCharts();}
   else if(CUR==='equip')v.innerHTML=viewEquip();
-  else if(CUR==='reliab')v.innerHTML=viewReliab();
+  else if(CUR==='reliab'){v.innerHTML=viewReliab();drawReliabCharts();}
   else if(CUR==='report')v.innerHTML=viewReport();
   else if(CUR==='eng')v.innerHTML=viewEng();
   else if(CUR==='faults')v.innerHTML=viewFaults();
@@ -428,8 +428,8 @@ function viewDash(){const k=kpis();const secHead=(n,t,c)=>`<div style="display:f
     ${kpiCard('Дууссан',k.byStatus['Дууссан']||0,'ok')}${kpiCard('Цуцлагдсан',k.byStatus['Цуцлагдсан']||0,'muted')}
     ${kpiCard('Шуурхай дуудлага',k.emergency,'danger')}</div>
   <div class="grid kpis" style="margin-bottom:16px">
-    ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF (цаг)',k.mtbf,'accent')}
-    ${kpiCard('MTTR (мин)',k.mttr,'warn')}${kpiCard('Downtime (мин)',k.down,'danger')}
+    ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF',fmtDur(k.mtbf*60),'accent','гэмтэл хооронд')}
+    ${kpiCard('MTTR',fmtDur(k.mttr),'warn','дундаж засвар')}${kpiCard('Нийт зогсолт',fmtDur(k.down),'danger')}
     ${kpiCard('Ажилласан цаг',k.workHours,'teal','Хүн тоо × 12ц')}${kpiCard('Нэгж бүт. эрчим хүч',k.unitEnergy,'accent','кВт/цаг (дундаж)')}</div>
   ${secHead('2','Өнөөдрийн товч & Мэдээ','#2fd07a')}
   ${dailySummaryPanel()}
@@ -776,17 +776,43 @@ function exportEquip(){const rows=[['TAG','Нэр','PD','Байршил','Анг
   DB.equip.forEach(e=>rows.push([e.tag,e.name,e.pd||'',e.area,e.cat,e.crit,e.maker||'',e.model||'',e.serial||'',e.warranty||'']));downloadCSV('Tonog-tohooromj',rows);}
 
 /* ---- Найдвартай ажиллагаа ---- */
-function viewReliab(){const r=equipReliability();
+// Гэмтлийн нийт зогсолтыг сараар нэгтгэх (тренд)
+function downtimeTrend(){const m={};DB.wos.filter(w=>w.fault&&inRange(w.date)).forEach(w=>{const key=(w.date||'').slice(0,7);if(!key)return;m[key]=(m[key]||0)+downtimeOf(w);});
+  return Object.keys(m).sort().map(k=>({k,min:m[k]}));}
+// Тоног төхөөрөмжийг нийт зогсолтоор эрэмбэлж топ N
+function topDowntime(n){return equipReliability().filter(x=>x.down>0).sort((a,b)=>b.down-a.down).slice(0,n||5);}
+function viewReliab(){const r=equipReliability();const top=topDowntime(5);const k=kpis();
+  const topMax=top.length?top[0].down:1;
   return `<div class="note" style="margin-bottom:16px">Тоноглол бүрийн зогсолт, downtime, MTBF, MTTR-ийг бүртгэсэн гэмтэл/ажлаас <b>автоматаар</b> тооцоолно. Огнооны шүүлтүүрээр (сар/жил) хугацааг өөрчилнө.</div>
-  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportReliab()">📤 Excel татах</button>')}
+  <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+    ${kpiCard('Availability',k.avail+'%','ok')}${kpiCard('MTBF',fmtDur(k.mtbf*60),'accent','дундаж гэмтэл хооронд')}
+    ${kpiCard('MTTR',fmtDur(k.mttr),'warn','дундаж засварын хугацаа')}${kpiCard('Нийт зогсолт',fmtDur(k.down),'danger')}</div>
+  <div class="grid col2" style="gap:16px;margin-bottom:16px">
+    <div class="glass card"><div class="section-title">📉 Зогсолтын чиг хандлага (сараар)</div><canvas id="cRelTrend" height="150"></canvas></div>
+    <div class="glass card"><div class="section-title">🏭 Хамгийн их зогссон тоног (топ 5)</div>
+      ${top.map((x,i)=>`<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span><b>${i+1}.</b> <span class="t-accent" style="font-family:monospace">${esc(x.tag)}</span> ${esc(x.name)||''}</span><span class="t-warn">${fmtDur(x.down)} · ${x.stops}удаа</span></div>
+        <div style="height:8px;background:var(--line);border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.round(x.down/topMax*100)}%;background:linear-gradient(90deg,#ff9f40,#ff4d4f)"></div></div></div>`).join('')||'<div class="muted" style="padding:14px">Зогсолт бүртгэгдээгүй.</div>'}</div></div>
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportReliab()">📤 Excel татах</button> <button class="btn btn-sm btn-ghost" onclick="printReliab()">🖨️ PDF тайлан</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
-    <thead><tr><th>TAG (асет)</th><th>Нэр</th><th>Зогсолтын тоо</th><th>Нийт downtime (мин)</th><th>MTTR (мин)</th><th>MTBF (цаг)</th><th>Нийт ажил</th></tr></thead>
+    <thead><tr><th>TAG (асет)</th><th>Нэр</th><th>Зогсолтын тоо</th><th>Нийт downtime</th><th>MTTR</th><th>MTBF</th><th>Нийт ажил</th></tr></thead>
     <tbody>${r.map(x=>`<tr><td class="t-accent" style="font-family:monospace">${esc(x.tag)}</td><td>${esc(x.name)}</td>
-      <td><b class="${x.stops?'t-danger':'t-muted'}">${x.stops}</b></td><td class="t-warn">${x.down}</td><td>${x.mttr}</td>
-      <td class="t-accent">${x.mtbf}</td><td class="muted">${x.works}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж алга.</td></tr>'}</tbody></table></div>`;}
-function exportReliab(){const rows=[['TAG','Нэр','Зогсолтын тоо','Нийт downtime(мин)','MTTR(мин)','MTBF(цаг)','Нийт ажил']];
-  equipReliability().forEach(x=>rows.push([x.tag,x.name,x.stops,x.down,x.mttr,x.mtbf,x.works]));
+      <td><b class="${x.stops?'t-danger':'t-muted'}">${x.stops}</b></td><td class="t-warn">${x.down?fmtDur(x.down):'—'}</td><td>${x.stops?fmtDur(x.mttr):'—'}</td>
+      <td class="t-accent">${x.mtbf==='—'?'—':fmtDur(x.mtbf*60)}</td><td class="muted">${x.works}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:32px" class="muted">Тоног төхөөрөмж алга.</td></tr>'}</tbody></table></div>`;}
+function drawReliabCharts(){const t=downtimeTrend();const el=document.getElementById('cRelTrend');if(!el||typeof Chart==='undefined')return;if(window._relC)window._relC.destroy();
+  window._relC=new Chart(el,{type:'bar',data:{labels:t.map(x=>x.k),datasets:[{label:'Зогсолт (цаг)',data:t.map(x=>+(x.min/60).toFixed(1)),backgroundColor:'#ff4d4f'}]},
+    options:baseOpts({plugins:{tooltip:{callbacks:{label:c=>fmtDur(c.raw*60)}}},scales:{x:{ticks:{color:'#8ea2c0'},grid:{color:'#243049'}},y:{ticks:{color:'#8ea2c0'},grid:{color:'#243049'},title:{display:true,text:'цаг',color:'#8ea2c0'}}}})});}
+function exportReliab(){const rows=[['TAG','Нэр','Зогсолтын тоо','Нийт downtime(мин)','Нийт downtime(хүн уншихаар)','MTTR(мин)','MTBF(цаг)','Нийт ажил']];
+  equipReliability().forEach(x=>rows.push([x.tag,x.name,x.stops,x.down,fmtDur(x.down),x.mttr,x.mtbf,x.works]));
   downloadCSV('Naidvartai-ajillagaa_'+RANGE.from+'_'+RANGE.to,rows);}
+function printReliab(){const r=equipReliability();const k=kpis();const top=topDowntime(10);
+  const w=window.open('','_blank');if(!w){toast('Popup хаалттай байна');return;}
+  w.document.write('<html><head><title>Найдвартай ажиллагааны тайлан</title><meta charset="utf-8"><style>body{font-family:Arial;padding:24px;color:#111}h1{font-size:18px}h2{font-size:14px;margin-top:18px}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{border:1px solid #ccc;padding:5px 7px;text-align:left}th{background:#f0f2f5}.r{text-align:right}</style></head><body>'+
+    '<h1>⚡ Тоног төхөөрөмжийн найдвартай ажиллагааны тайлан</h1><div>Хугацаа: '+RANGE.from+' — '+RANGE.to+'</div>'+
+    '<h2>Ерөнхий үзүүлэлт</h2><table><tr><th>Availability</th><td>'+k.avail+'%</td><th>MTBF</th><td>'+fmtDur(k.mtbf*60)+'</td><th>MTTR</th><td>'+fmtDur(k.mttr)+'</td><th>Нийт зогсолт</th><td>'+fmtDur(k.down)+'</td></tr></table>'+
+    '<h2>Хамгийн их зогссон тоног (топ 10)</h2><table><thead><tr><th>#</th><th>TAG</th><th>Нэр</th><th>Зогсолт</th><th>Нийт downtime</th><th>MTTR</th><th>MTBF</th></tr></thead><tbody>'+
+    top.map((x,i)=>'<tr><td>'+(i+1)+'</td><td>'+x.tag+'</td><td>'+(x.name||'')+'</td><td>'+x.stops+'</td><td>'+fmtDur(x.down)+'</td><td>'+fmtDur(x.mttr)+'</td><td>'+(x.mtbf==='—'?'—':fmtDur(x.mtbf*60))+'</td></tr>').join('')+
+    '</tbody></table><p style="margin-top:20px;font-size:11px;color:#777">НБҮГ-ЗТХ Цахилгааны нэгж · '+new Date().toLocaleString()+'</p></body></html>');
+  w.document.close();setTimeout(()=>w.print(),400);}
 
 /* ---- ТАЙЛАН / ДҮГНЭЛТ (авто) ---- */
 function reportData(){const k=kpis();const rel=equipReliability();const topStop=rel.find(x=>x.stops>0);
@@ -864,7 +890,7 @@ function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&isActiveFault(w)).sor
   const fixed=DB.wos.filter(w=>w.fault&&!isActiveFault(w)&&inRange(w.date)).length;
   return `<div class="note" style="margin-bottom:16px">Зөвхөн <b>идэвхтэй (засагдаагүй)</b> гэмтэл харагдана. Засварласан гэмтэл <b>Ажлын түүх</b> рүү шилжинэ${fixed?' ('+fixed+' засварласан)':''}.
     <button class="btn btn-sm" style="margin-left:10px" onclick="go('new')">➕ Гэмтэл бүртгэх</button> <button class="btn btn-sm btn-ghost" onclick="go('work')">📋 Ажлын түүх</button></div>
-  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportFaults()">📤 Excel татах</button>')}
+  ${exportBar('<button class="btn btn-sm btn-ghost" onclick="exportFaults()">📤 Excel татах</button> <button class="btn btn-sm btn-ghost" onclick="printFaults()">🖨️ PDF тайлан</button>')}
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>WO</th><th>Tag</th><th>Тайлбар</th><th>📷</th><th>Priority</th><th>Root Cause</th><th>Downtime</th><th>Гэмтлийн төлөв</th></tr></thead>
     <tbody>${rows.map(w=>`<tr><td class="t-accent" style="font-family:monospace;font-size:12px">${esc(w.no)}</td><td>${esc(w.equip)}</td>
@@ -872,9 +898,19 @@ function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&isActiveFault(w)).sor
       <td class="muted">${esc(w.root)||'—'}</td><td>${w.start?'<span class="t-warn">'+fmtDur((Date.now()-new Date(w.start))/60000)+'</span> <span class="muted" style="font-size:10px">(үргэлжилж буй)</span>':'—'}</td>
       <td>${woStatusCell(w)}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Гэмтэл алга.</td></tr>'}</tbody></table></div>`;}
 function photoThumbs(ph){if(!ph||!ph.length)return '<span class="muted">—</span>';return ph.map(d=>'<img src="'+d+'" style="height:32px;border-radius:4px;cursor:zoom-in;margin:1px" onclick="showImgFromEl(this)">').join('');}
-function exportFaults(){const rows=[['WO','Tag','Тайлбар','Priority','Root Cause','Action Taken','Downtime(мин)','Статус','Огноо']];
-  DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(w=>rows.push([w.no,w.equip,w.desc,w.prio,w.root,w.action,downtimeOf(w),w.status,w.date]));
+function exportFaults(){const rows=[['WO','Tag','Тайлбар','Priority','Root Cause','Action Taken','Downtime(мин)','Downtime(хоног/цаг)','Эхэлсэн','Дууссан','Статус','Огноо']];
+  DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(w=>rows.push([w.no,w.equip,w.desc,w.prio,w.root,w.action,downtimeOf(w),fmtDur(downtimeOf(w)),(w.start||'').replace('T',' '),(w.finish||'').replace('T',' '),w.status,w.date]));
   downloadCSV('Gemtel_'+RANGE.from+'_'+RANGE.to,rows);}
+function printFaults(){const list=DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1);
+  const k=kpis();const active=list.filter(isActiveFault).length,fixed=list.length-active;
+  const w=window.open('','_blank');if(!w){toast('Popup хаалттай байна');return;}
+  w.document.write('<html><head><title>Гэмтлийн тайлан</title><meta charset="utf-8"><style>body{font-family:Arial;padding:24px;color:#111}h1{font-size:18px}h2{font-size:14px;margin-top:16px}table{border-collapse:collapse;width:100%;font-size:11px;margin-top:8px}th,td{border:1px solid #ccc;padding:5px 6px;text-align:left;vertical-align:top}th{background:#f0f2f5}.crit{color:#c00;font-weight:bold}</style></head><body>'+
+    '<h1>⚡ Цахилгааны гэмтлийн тайлан</h1><div>Хугацаа: '+RANGE.from+' — '+RANGE.to+'</div>'+
+    '<h2>Дүн: нийт '+list.length+' гэмтэл ('+active+' идэвхтэй, '+fixed+' засварласан) · Нийт зогсолт '+fmtDur(k.down)+' · MTTR '+fmtDur(k.mttr)+'</h2>'+
+    '<table><thead><tr><th>WO</th><th>Огноо</th><th>Tag</th><th>Тайлбар</th><th>Priority</th><th>Root Cause</th><th>Авсан арга хэмжээ</th><th>Эхэлсэн</th><th>Дууссан</th><th>Зогсолт</th><th>Төлөв</th></tr></thead><tbody>'+
+    list.map(x=>'<tr><td>'+esc(x.no)+'</td><td>'+esc(x.date)+'</td><td>'+esc(x.equip||'')+'</td><td>'+esc(x.desc||'')+'</td><td'+(x.prio==='Эгзэгтэй'?' class="crit"':'')+'>'+esc(x.prio||'')+'</td><td>'+esc(x.root||'')+'</td><td>'+esc(x.action||'')+'</td><td>'+esc((x.start||'').replace('T',' '))+'</td><td>'+esc((x.finish||'').replace('T',' '))+'</td><td>'+(isActiveFault(x)?'<span class="crit">үргэлжилж буй</span>':fmtDur(downtimeOf(x)))+'</td><td>'+esc(faultState(x))+'</td></tr>').join('')+
+    '</tbody></table><p style="margin-top:20px;font-size:11px;color:#777">НБҮГ-ЗТХ Цахилгааны нэгж · '+new Date().toLocaleString()+'</p></body></html>');
+  w.document.close();setTimeout(()=>w.print(),400);}
 
 /* ---- СЭЛБЭГИЙН НӨӨЦ ---- */
 function viewParts(){
@@ -1798,10 +1834,20 @@ function toggleTheme(){const light=!document.body.classList.contains('light');lo
 function notifyBrowser(title,body){try{if(!('Notification'in window))return;if(Notification.permission==='granted')new Notification(title,{body:body||''});}catch(e){}}
 function enableBrowserNotif(){if(!('Notification'in window)){toast('Энэ browser дэмжихгүй');return;}Notification.requestPermission().then(p=>{if(p==='granted'){localStorage.setItem('bnotif','1');toast('Browser мэдэгдэл асаалаа ✓');notifyBrowser('✓ Мэдэгдэл идэвхжлээ','Танд шинэ зүйл болоход энд мэдэгдэнэ');}else toast('Зөвшөөрөл өгөгдсөнгүй');});}
 let _notifTimer=null,_lastUnread=0;
+const ESCALATE_H=4;   // эгзэгтэй гэмтэл N цагаас удаан засагдаагүй бол сэрэмжлүүлнэ
+// Удаан үргэлжилсэн эгзэгтэй гэмтлийг илрүүлж, нэг удаа Telegram/мэдэгдэл илгээнэ (зөвхөн Админ/Ахлах/Мастер сесс)
+async function checkEscalations(){if(!ME||!['ADMIN','CHIEF','MASTER'].includes(ME.role))return;
+  const now=Date.now();let changed=false;
+  (DB.wos||[]).forEach(w=>{if(!w.fault||!isActiveFault(w)||w.prio!=='Эгзэгтэй'||w.escalated)return;
+    if(!w.start)return;const ageH=(now-new Date(w.start).getTime())/3600000;if(ageH<ESCALATE_H)return;
+    w.escalated=true;changed=true;
+    const msg='🚨 АНХААР: Эгзэгтэй гэмтэл '+Math.round(ageH)+' цаг засагдаагүй хэвээр!\nТоног: '+(w.equip||w.pd||'—')+'\nТайлбар: '+(w.desc||'')+'\nЭхэлсэн: '+((w.start||'').replace('T',' '));
+    notify(msg);pushNotif('*',msg);notifyBrowser('🚨 Эгзэгтэй гэмтэл',(w.equip||'')+' — '+ESCALATE_H+'ц+ засагдаагүй');});
+  if(changed)await saveNow();}
 function startNotifPoll(){if(_notifTimer)clearInterval(_notifTimer);_lastUnread=myUnread();
   _notifTimer=setInterval(async()=>{try{const fresh=await api('/api/data',{headers:authHdr()});DB=fresh;const u=myUnread();renderNav();
     if(u>_lastUnread){const n=(DB.notifs||[]).filter(x=>x.toName===ME.name||x.toName==='*').slice(-1)[0];notifyBrowser('🔔 Шинэ мэдэгдэл',n?n.text:'Танд шинэ мэдэгдэл байна');}
-    _lastUnread=u;}catch(e){}},45000);}
+    _lastUnread=u;await checkEscalations();}catch(e){}},45000);}
 /* ---- Global search / Command palette (Sprint 11) ---- */
 function openSearch(){if(document.getElementById('gsModal'))return;const o=document.createElement('div');o.id='gsModal';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:400;display:grid;place-items:start center;padding:60px 16px';o.onclick=e=>{if(e.target===o)o.remove();};
   o.innerHTML=`<div class="glass card" style="max-width:560px;width:100%"><input id="gsInput" placeholder="Хайх: тоног, PD, наряд, гэмтэл, цэс..." oninput="renderSearch(this.value)" style="font-size:16px"><div id="gsRes" style="margin-top:10px;max-height:55vh;overflow:auto"></div></div>`;
