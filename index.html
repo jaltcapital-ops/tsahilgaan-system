@@ -756,6 +756,14 @@ function eqFiltered(){const q=(window._eq||'').toLowerCase();const kind=window._
   return q?list.filter(e=>[e.tag,e.name,e.pd,e.area,e.cat].join(' ').toLowerCase().includes(q)):list;}
 function setEqKind(k){window._eqKind=k;render();}
 function toggleEqKind(tag){const e=(DB.equip||[]).find(x=>x.tag===tag);if(!e)return;e.insKind=equipKind(e)==='PD'?'TAG':'PD';save();audit('Тоногийн ангилал',tag+' → '+e.insKind);render();}
+// QR/PD жагсаалт (DB.pdList)-аас PD ангиллын тоног авто үүсгэнэ
+function importPdAsEquip(){if(!ME||ME.role!=='ADMIN'){toast('Зөвхөн админ');return;}
+  const pds=DB.pdList||[];if(!pds.length){toast('PD жагсаалт хоосон байна');return;}
+  if(!confirm(pds.length+' PD дугаарыг PD ангиллын тоног болгон үүсгэх үү?\n(Аль хэдийн бүртгэлтэйг алгасна)'))return;
+  const have=new Set((DB.equip||[]).map(e=>e.tag));let added=0;
+  pds.forEach(p=>{p=String(p).trim();if(!p||have.has(p))return;
+    DB.equip.push({tag:p,name:'PD '+p,pd:p,cat:'PD',area:'',crit:'Дунд',insKind:'PD',insFreq:0,insStart:iso(new Date())});have.add(p);added++;});
+  save();audit('PD тоног импортлов',added+' PD');toast(added+' PD тоног үүслээ ✓ (PD ангиллаас харна)');window._eqKind='PD';render();}
 function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
   return `<div class="muted" style="font-size:12px;margin-bottom:8px">${list.length} тоног төхөөрөмж${list.length>300?' (эхний 300 харуулж байна, хайлт нарийсгана уу)':''}</div>
   <div class="glass card" style="padding:0;overflow:auto"><table>
@@ -790,7 +798,8 @@ function viewEquip(){
     <b style="font-size:13px">🗂️ Ангилал:</b><div class="seg">${[['ALL','Бүгд'],['TAG','TAG'],['PD','PD']].map(([k,l])=>{const cnt=k==='ALL'?(DB.equip||[]).length:(DB.equip||[]).filter(e=>equipKind(e)===k).length;return `<button class="${(window._eqKind||'ALL')===k?'on':''}" onclick="setEqKind('${k}')">${l} (${cnt})</button>`;}).join('')}</div>
     🔍 <input id="eq" value="${esc(window._eq||'')}" placeholder="TAG, нэр, PD-аар хайх…" oninput="refreshEq(this.value)" style="flex:1;min-width:180px">
     <button class="btn btn-sm btn-ghost" onclick="go('qr')">🔲 QR кодууд</button>
-    <button class="btn btn-sm btn-ghost" onclick="exportEquip()">📤 Excel</button></div>
+    <button class="btn btn-sm btn-ghost" onclick="exportEquip()">📤 Excel</button>
+    ${ME&&ME.role==='ADMIN'?`<button class="btn btn-sm" onclick="importPdAsEquip()" title="QR/PD жагсаалтаас PD тоног үүсгэх">🔌 PD жагсаалтаас татах (${(DB.pdList||[]).length})</button>`:''}</div>
   <div id="eqResults">${eqResultsHTML()}</div>`;}
 function addEquip(e){e.preventDefault();const tag=val('e_tag').trim();
   if(DB.equip.some(x=>x.tag===tag)){toast('Энэ TAG бүртгэлтэй');return;}
