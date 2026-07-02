@@ -816,7 +816,12 @@ function importPdAsEquip(){if(!ME||ME.role!=='ADMIN'){toast('Зөвхөн адм
     DB.equip.push({tag:p,name:'PD '+p,pd:p,cat:'PD',area:'',crit:'Дунд',insKind:'PD',insFreq:0,insStart:iso(new Date())});have.add(p);added++;});
   save();audit('PD тоног импортлов',added+' PD');toast(added+' PD тоног үүслээ ✓ (PD ангиллаас харна)');window._eqKind='PD';render();}
 // PD дугаарыг багц болгон бүлэглэх түлхүүр: "11PD-01" → "PD11", "31PD-LVIC" → "PD31"
-function pdGroupKey(tag){const t=String(tag||'');let m=t.match(/(\d+)\s*PD/i);if(m)return 'PD'+m[1];m=t.match(/PD\s*(\d+)/i);if(m)return 'PD'+m[1];return 'Бусад PD';}
+function pdGroupKey(tag){const t=String(tag||'');
+  if(/10\s*к[вv]|10\s*kv|\bХБ\b/i.test(t))return '10кВ ХБ';        // өндөр хүчдэл тусдаа багц
+  let m=t.match(/^\s*(\d+)\s*PD/i);if(m)return 'PD'+m[1];          // фидер: 11PD-01 → PD11
+  m=t.match(/PD\s*[-\s]*(\d+)\s*$/i);if(m)return 'PD'+m[1];        // самбар: ...PD11 → PD11
+  m=t.match(/PD\s*(\d+)/i);if(m)return 'PD'+m[1];
+  return 'Бусад PD';}
 // Үзлэгийн төлөв — өнгөөр ялгана: 🟢хугацаандаа 🟡удахгүй 🔴хэтэрсэн 🔵өнөөдөр хийсэн
 function insStatus(e){if(!(+e.insFreq>0))return null;const today=iso(new Date());
   if(lastInspect(e.tag)===today)return {c:'#2e8bff',dot:'🔵',t:'Өнөөдөр хийгдсэн'};
@@ -863,15 +868,18 @@ function eqResultsHTML(){const list=eqFiltered();const shown=list.slice(0,300);
   // PD шүүлтүүр идэвхтэй бол багцлан харуулна (PD11 → 11PD-01 ... 11PD-LVIC)
   if((window._eqKind)==='PD'){const groups={};list.forEach(e=>{const k=pdGroupKey(e.tag);(groups[k]=groups[k]||[]).push(e);});
     const keys=Object.keys(groups).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
-    return `<div class="muted" style="font-size:12px;margin-bottom:8px">${list.length} PD · ${keys.length} багц</div>`+
-      keys.map(k=>`<details class="glass card" style="margin-bottom:8px" open><summary style="cursor:pointer;font-weight:700;font-size:14px;padding:4px 2px">🔌 ${esc(k)} <span class="badge b-accent" style="margin-left:6px">${groups[k].length}</span></summary>
-        <div style="overflow:auto"><table style="margin-top:8px"><thead><tr><th>PD дугаар (TAG)</th><th>Нэр</th><th>🔁 Үзлэг</th><th>Эгзэгтэй</th><th>Үйлдэл</th></tr></thead><tbody>
-        ${groups[k].sort((a,b)=>a.tag.localeCompare(b.tag,undefined,{numeric:true})).map(e=>{const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
-          return `<tr><td><a onclick="openPdPassport('${esc(e.tag)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline;font-family:monospace">${esc(e.tag)}</a></td>
-          <td>${esc(e.name)||'—'}</td><td style="white-space:nowrap">${eqInsCell(e)}</td>
-          <td><span class="badge ${tb}">${esc(e.crit)}</span></td>
-          <td style="white-space:nowrap"><button class="ic" title="QR хэвлэх" onclick="showPdQR('${esc(e.tag)}')">🔲</button><button class="ic" title="TAG болгох" onclick="toggleEqKind('${esc(e.tag)}')">⇄</button>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')}
-        </tbody></table></div></details>`).join('')||'<div class="muted" style="padding:16px">PD алга — "🔌 PD жагсаалтаас татах" дарж үүсгэнэ үү.</div>';}
+    const tplBadge={mcc:'<span class="badge b-teal" style="font-size:10px">Самбар</span>',feeder:'<span class="badge b-accent" style="font-size:10px">Фидер</span>',hv:'<span class="badge b-warn" style="font-size:10px">10кВ HV</span>',standard:'<span class="muted" style="font-size:10px">—</span>'};
+    const rank={mcc:0,hv:0,feeder:1,standard:2};
+    return `<div class="muted" style="font-size:12px;margin-bottom:8px">${list.length} PD · ${keys.length} багц · 🔌 самбар доор фидерүүд эвхэгдэнэ</div>`+
+      keys.map(k=>{const arr=groups[k].slice().sort((a,b)=>(rank[templateFor(a).id]||9)-(rank[templateFor(b).id]||9)||a.tag.localeCompare(b.tag,undefined,{numeric:true}));
+        const panel=arr.find(e=>templateFor(e).id==='mcc');const head=panel?esc(panel.name||panel.tag):esc(k);
+        return `<details class="glass card" style="margin-bottom:8px" open><summary style="cursor:pointer;font-weight:700;font-size:14px;padding:4px 2px">🔌 ${head} <span class="badge b-muted" style="margin-left:6px;font-family:monospace">${esc(k)}</span> <span class="badge b-accent">${arr.length}</span></summary>
+        <div style="overflow:auto"><table style="margin-top:8px"><thead><tr><th>PD дугаар (TAG)</th><th>Нэр</th><th>Маягт</th><th>🔁 Үзлэг</th><th>Үйлдэл</th></tr></thead><tbody>
+        ${arr.map(e=>{const t=templateFor(e).id;
+          return `<tr${t==='mcc'?' style="background:rgba(46,139,255,.06)"':''}><td><a onclick="openPassport('${esc(e.tag)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline;font-family:monospace">${esc(e.tag)}</a></td>
+          <td>${esc(e.name)||'—'}</td><td>${tplBadge[t]||''}</td><td style="white-space:nowrap">${eqInsCell(e)}</td>
+          <td style="white-space:nowrap"><button class="ic" title="Үзлэг хийх" onclick="openPassport('${esc(e.tag)}')">✅</button><button class="ic" title="QR хэвлэх" onclick="showPdQR('${esc(e.tag)}')">🔲</button><button class="ic" title="TAG болгох" onclick="toggleEqKind('${esc(e.tag)}')">⇄</button>${delBtn(`delEquip('${esc(e.tag)}')`)}</td></tr>`;}).join('')}
+        </tbody></table></div></details>`;}).join('')||'<div class="muted" style="padding:16px">PD алга — "🔌 PD жагсаалтаас татах" дарж үүсгэнэ үү.</div>';}
   return `<div class="muted" style="font-size:12px;margin-bottom:8px">${list.length} тоног төхөөрөмж${list.length>300?' (эхний 300 харуулж байна, хайлт нарийсгана уу)':''}</div>
   <div class="glass card" style="padding:0;overflow:auto"><table>
     <thead><tr><th>TAG</th><th>Нэр</th><th>PD</th><th>Байршил</th><th>Ангилал</th><th>🔁 Үзлэг</th><th>Эгзэгтэй</th><th>Гэмтэл</th><th></th></tr></thead>
@@ -1198,7 +1206,7 @@ function viewPdPassport(){const pd=window._pdTag;
 /* ===== Үзлэгийн маягтын config (hardcode биш — шинэ маягт нэмэхэд энд нэг блок нэмнэ) ===== */
 const INS_TEMPLATES={
   standard:{id:'standard',name:'Стандарт үзлэг',items:null},
-  mcc:{id:'mcc',name:'MCC / Хуваарилах байгууламжийн QR үзлэг',items:[
+  mcc:{id:'mcc',name:'MCC / Хуваарилах байгууламжийн самбарын үзлэг',items:[
     {q:'Цэвэрлэгээ',ok:'Хэвийн',bad:'Бохир'},
     {q:'Хэт халалт',ok:'Байхгүй',bad:'Илэрсэн'},
     {q:'Хэвийн бус дуу',ok:'Байхгүй',bad:'Илэрсэн'},
@@ -1209,47 +1217,72 @@ const INS_TEMPLATES={
     {q:'Alarm / Trip',ok:'Байхгүй',bad:'Байгаа'},
     {q:'Доголдол илэрсэн үү?',ok:'Үгүй',bad:'Тийм',isFaultFlag:true},
   ]},
+  feeder:{id:'feeder',name:'Фидер / эсийн үзлэг',items:[
+    {q:'Хэвийн эсэх',ok:'Хэвийн',bad:'Хэвийн бус'},
+    {q:'Ачааллын гүйдэл',type:'num',unit:'А',ok:'Хэвийн',bad:'Хэт ачаалалтай'},
+    {q:'Хэт халалт (контакт)',ok:'Байхгүй',bad:'Илэрсэн'},
+    {q:'Доголдол илэрсэн үү?',ok:'Үгүй',bad:'Тийм',isFaultFlag:true},
+  ]},
+  hv:{id:'hv',name:'10кВ өндөр хүчдэлийн эсийн үзлэг',items:[
+    {q:'Цэвэрлэгээ',ok:'Хэвийн',bad:'Бохир'},
+    {q:'Изоляц / оч / корон',ok:'Байхгүй',bad:'Илэрсэн'},
+    {q:'Хэт халалт (шин/контакт)',ok:'Байхгүй',bad:'Илэрсэн'},
+    {q:'Тос / SF6 / вакуум таслуур',ok:'Хэвийн',bad:'Анхаарах'},
+    {q:'Хэвийн бус дуу / чимээ',ok:'Байхгүй',bad:'Илэрсэн'},
+    {q:'Газардуулга / хамгаалалт',ok:'Хэвийн',bad:'Гэмтэлтэй'},
+    {q:'Реле / дохиолол / индикатор',ok:'Хэвийн',bad:'Ажилласан (trip)'},
+    {q:'Доголдол илэрсэн үү?',ok:'Үгүй',bad:'Тийм',isFaultFlag:true},
+  ]},
 };
-const CATEGORY_TEMPLATE={PD:'mcc',TAG:'standard'};        // Category → Inspection Template
-function templateFor(e){return INS_TEMPLATES[CATEGORY_TEMPLATE[equipKind(e||{})]||'standard']||INS_TEMPLATES.standard;}
+// Тоногийн ангилал/нэрээс маягтыг автоматаар тодорхойлно (гараар insTpl-оор дарж болно)
+function autoTemplate(e){const s=((e.tag||'')+' '+(e.name||''));
+  if(equipKind(e)!=='PD')return 'standard';
+  if(/10\s*к[вv]|10\s*kv|\bХБ\b/i.test(s))return 'hv';       // 10кВ ХБ
+  if(/^\s*\d+\s*PD\s*-/i.test(e.tag||''))return 'feeder';    // 11PD-01 … фидер
+  return 'mcc';                                              // ТНБА-1 PD11 гэх мэт самбар
+}
+function templateFor(e){e=e||{};const id=e.insTpl&&INS_TEMPLATES[e.insTpl]?e.insTpl:autoTemplate(e);return INS_TEMPLATES[id]||INS_TEMPLATES.standard;}
 /* ===== PD ангиллын тоног төхөөрөмжийг нэг удаа бүртгэх ===== */
 const PD_SEED=[['10кВ ХБ-1',''],['10кВ ХБ-2',''],['10кВ ХБ-3',''],['ТНБА-1 PD11','PD11'],['ТНБА-1 PD12','PD12'],['Шигших бутлах PD21','PD21'],['ББА-1 PD83','PD83'],['ББА-2 PD84','PD84'],['Дамжуулах-10 PD91','PD91'],['Ачилтын систем PD81','PD81'],['Ачилтын систем PD82','PD82'],['Дулааны станц PD11','PD11'],['Вагонд ачилтын систем PD','PD'],['Үндсэн үйлдвэр PD31','PD31'],['Үндсэн үйлдвэр PD32','PD32'],['Үндсэн үйлдвэр PD33','PD33'],['Үндсэн үйлдвэр PD34','PD34'],['Үндсэн үйлдвэр PD35','PD35'],['Үндсэн үйлдвэр PD36','PD36']];
 function ensurePdEquip(){if(DB.pdSeedV1)return;if(!DB.equip)DB.equip=[];const have=new Set(DB.equip.map(e=>e.tag));let n=0;
   PD_SEED.forEach(([nm,pd])=>{if(have.has(nm))return;DB.equip.push({tag:nm,name:nm,pd:pd,cat:'PD',area:'',crit:'Дунд',insKind:'PD',insFreq:0,insStart:iso(new Date())});have.add(nm);n++;});
   DB.pdSeedV1=true;save();if(n)audit('PD тоног seed',n+' ширхэг');}
-/* ===== MCC маягтын QR үзлэгийн форм ===== */
-function mccCheckForm(target){window._newPhotos=[];const tpl=INS_TEMPLATES.mcc;
-  return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">🔌 ${esc(tpl.name)}</div>
-    <form onsubmit="saveMccCheck(event,'${esc(target)}')">
-    ${tpl.items.map((it,i)=>`<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div style="font-weight:600;font-size:14px;margin-bottom:6px">${i+1}. ${esc(it.q)}</div>
-      <label style="display:inline-flex;gap:6px;align-items:center;margin-right:18px;cursor:pointer"><input type="radio" name="mcc_${i}" value="ok" checked style="width:auto"> ✅ ${esc(it.ok)}</label>
-      <label style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="radio" name="mcc_${i}" value="bad" style="width:auto"> ❌ ${esc(it.bad)}</label></div>`).join('')}
+/* ===== Config-driven үзлэгийн маягт (radio + тоон утга) ===== */
+function tplForm(target,tplId){window._newPhotos=[];const tpl=INS_TEMPLATES[tplId];if(!tpl||!tpl.items)return '';
+  return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">🔌 ${esc(tpl.name)} <span class="badge b-muted" style="margin-left:auto;font-family:monospace">${esc(target)}</span></div>
+    <form onsubmit="saveTplCheck(event,'${esc(target)}','${tplId}')">
+    ${tpl.items.map((it,i)=>{const num=it.type==='num'?`<input type="number" step="0.1" id="tp_num_${i}" placeholder="${esc(it.unit||'')}" style="max-width:150px;margin:4px 0"><br>`:'';
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div style="font-weight:600;font-size:14px;margin-bottom:6px">${i+1}. ${esc(it.q)}${it.unit?' ('+esc(it.unit)+')':''}</div>
+      ${num}<label style="display:inline-flex;gap:6px;align-items:center;margin-right:18px;cursor:pointer"><input type="radio" name="tp_${i}" value="ok" checked style="width:auto"> ✅ ${esc(it.ok)}</label>
+      <label style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="radio" name="tp_${i}" value="bad" style="width:auto"> ❌ ${esc(it.bad)}</label></div>`;}).join('')}
     <div class="field" style="margin-top:12px"><span>📷 Зураг хавсаргах</span><input type="file" accept="image/*" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></div>
-    <label class="field" style="margin-top:10px"><span>Тайлбар</span><textarea id="mcc_note" rows="3" placeholder="Үзлэгийн үеэр илэрсэн доголдол, хийсэн арга хэмжээ болон нэмэлт тайлбар..."></textarea></label>
+    <label class="field" style="margin-top:10px"><span>Тайлбар</span><textarea id="tp_note" rows="3" placeholder="Үзлэгийн үеэр илэрсэн доголдол, хийсэн арга хэмжээ болон нэмэлт тайлбар..."></textarea></label>
     <div style="margin-top:14px"><button class="btn">✅ Үзлэг хадгалах</button>
       <span class="muted" style="font-size:12px;margin-left:10px">Доголдол илэрсэн бол Цахилгааны гэмтэлд бүртгэгдэнэ.</span></div></form></div>`;}
-async function saveMccCheck(e,target){e.preventDefault();const tpl=INS_TEMPLATES.mcc;
-  const results=tpl.items.map((it,i)=>{const v=(document.querySelector('input[name="mcc_'+i+'"]:checked')||{}).value;const bad=v==='bad';return {item:it.q,status:bad?'Анхаарах':'OK',note:bad?it.bad:it.ok,fault:!!(bad&&it.isFaultFlag)};});
-  const note=val('mcc_note');const hasFault=results.some(r=>r.fault);const overall=results.some(r=>r.status==='Анхаарах')?'Анхаарах':'OK';
+async function saveTplCheck(e,target,tplId){e.preventDefault();const tpl=INS_TEMPLATES[tplId];if(!tpl)return;
+  const results=tpl.items.map((it,i)=>{const v=(document.querySelector('input[name="tp_'+i+'"]:checked')||{}).value;const bad=v==='bad';
+    let note=bad?it.bad:it.ok;if(it.type==='num'){const nv=val('tp_num_'+i);if(nv)note=nv+(it.unit||'')+' · '+note;}
+    return {item:it.q,status:bad?'Анхаарах':'OK',note,fault:!!(bad&&it.isFaultFlag)};});
+  const note=val('tp_note');const hasFault=results.some(r=>r.fault);const overall=results.some(r=>r.status==='Анхаарах')?'Анхаарах':'OK';
   if(!DB.inspections)DB.inspections=[];if(!DB.seq.inspection)DB.seq.inspection=0;if(!DB.seq.wo)DB.seq.wo=0;
-  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',results,overall,note,template:'mcc',photos:(window._newPhotos||[]).slice()});
-  const insWo=completeInsWO(target);audit('MCC QR үзлэг',target+' · '+overall);
+  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',results,overall,note,template:tplId,photos:(window._newPhotos||[]).slice()});
+  const insWo=completeInsWO(target);audit('QR үзлэг ('+tplId+')',target+' · '+overall);
   const eqp=(DB.equip||[]).find(x=>x.tag===target)||{};
   if(hasFault){const now=new Date().toISOString().slice(0,16);
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:null,date:iso(new Date()),
       equip:target,pd:eqp.pd||'',area:eqp.area||'',type:'Шуурхай дуудлага',prio:'Өндөр',status:'Нээлттэй',
-      desc:note||(target+' дээр доголдол илэрсэн (MCC үзлэг)'),fault:true,fstate:'Эвдрэлтэй',
-      root:results.filter(r=>r.status==='Анхаарах').map(r=>r.item).join(', '),action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()});
+      desc:note||(target+' дээр доголдол илэрсэн ('+tpl.name+')'),fault:true,fstate:'Эвдрэлтэй',
+      root:results.filter(r=>r.status==='Анхаарах').map(r=>r.item+(r.note&&r.note!=='OK'?'('+r.note+')':'')).join(', '),action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()});
     window._newPhotos=[];await saveNow();
-    notify('⚡ ДОГОЛДОЛ илэрлээ (MCC үзлэг)\nТоног: '+target+'\nАсуудал: '+results.filter(r=>r.status==='Анхаарах').map(r=>r.item).join(', ')+'\n'+(note?'Тайлбар: '+note+'\n':'')+(ME?ME.name:''));
+    notify('⚡ ДОГОЛДОЛ илэрлээ ('+tpl.name+')\nТоног: '+target+'\nАсуудал: '+results.filter(r=>r.status==='Анхаарах').map(r=>r.item).join(', ')+'\n'+(note?'Тайлбар: '+note+'\n':'')+(ME?ME.name:''));
     pushNotif('*','⚡ Доголдол: '+target);notifyBrowser('⚡ Доголдол илэрлээ',target);
     toast('Доголдол бүртгэгдлээ ✓ · Үзлэг хадгалагдлаа'+(insWo?' · Наряд '+insWo.no+' Completed':''));go('faults');return;}
   window._newPhotos=[];await saveNow();
   const nd=eqp?nextDueOf(eqp):null;
-  if(overall==='Анхаарах')notify('🔌 MCC ҮЗЛЭГ: Анхаарах илэрлээ\nТоног: '+target+'\n'+results.filter(r=>r.status==='Анхаарах').map(r=>r.item).join(', ')+'\n'+(ME?ME.name:''));
+  if(overall==='Анхаарах')notify('🔌 ҮЗЛЭГ ('+tpl.name+'): Анхаарах илэрлээ\nТоног: '+target+'\n'+results.filter(r=>r.status==='Анхаарах').map(r=>r.item).join(', ')+'\n'+(ME?ME.name:''));
   toast('Үзлэг хадгалагдлаа ✓ ('+overall+')'+(insWo?' · Наряд '+insWo.no+' Completed':'')+(nd&&+eqp.insFreq>0?' · дараагийн '+nd:''));render();}
 function quickCheckForm(target,kind){window._newPhotos=[];const eq=kind==='equip';
-  const eObj=(DB.equip||[]).find(x=>x.tag===target);if(eObj&&equipKind(eObj)==='PD')return mccCheckForm(target);   // PD → MCC маягт
+  const eObj=(DB.equip||[]).find(x=>x.tag===target);if(eObj){const t=templateFor(eObj);if(t.id!=='standard')return tplForm(target,t.id);}   // PD/самбар/фидер/HV → тохирох маягт
   return `<div class="glass card" style="margin-bottom:16px"><div class="section-title">✅ Ажиллагааны үзлэг (QR)</div>
     <form onsubmit="saveQuickCheck(event,'${esc(target)}','${kind}')">
     ${eq?`<div class="col3">
