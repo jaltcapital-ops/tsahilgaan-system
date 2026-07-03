@@ -242,7 +242,8 @@ const ATT2=[
  {k:'day',     lbl:'Өдрөөр ажилласан',                 hrs:true, suf:'',   bucket:'day',     tone:'#2fd07a'},
  {k:'night',   lbl:'Шөнөөр ажилласан',                 hrs:true, suf:'/8', bucket:'night',   tone:'#2e8bff'},
  {k:'holiday', lbl:'Баярын цаг',                       hrs:true, suf:'б',  bucket:'holiday', tone:'#a78bfa'},
- {k:'ot',      lbl:'Илүү цаг (сунаж/дуудагдан)',        hrs:true, suf:'с',  bucket:'ot',      tone:'#ffb020'},
+ {k:'ot',      lbl:'Илүү цаг — өдрөөр сунаж (Нс)',      hrs:true, suf:'с',  bucket:'ot',      tone:'#ffb020'},
+ {k:'otnight', lbl:'Шөнийн сунаж (Шс)',                 hrs:true, suf:'шс', bucket:'ot',      tone:'#e8992d'},
  {k:'callout', lbl:'Ээлжийн амралтаас дуудагдсан',      hrs:true, suf:'д',  bucket:'callout', tone:'#ff7a45'},
  {k:'road',    lbl:'Замын цаг',                        hrs:true, suf:'з',  bucket:'road',    tone:'#1ec8c8'},
  {k:'roadh',   lbl:'Замын цаг (баяр)',                 hrs:true, suf:'зб', bucket:'road',    tone:'#1ec8c8'},
@@ -530,7 +531,7 @@ function execWidgets(){const nar=DB.naryad||[];const open=nar.filter(w=>!WO_DONE
   const overdue=nar.filter(w=>!WO_DONE(w)&&w.status!=='Cancelled'&&w.plannedFinish&&new Date(w.plannedFinish)<now).length;
   const faulty=new Set((DB.wos||[]).filter(isActiveFault).map(w=>w.equip||w.pd));
   const eqH=(DB.equip&&DB.equip.length)?Math.round((DB.equip.length-faulty.size)/DB.equip.length*100):100;
-  const today=iso(new Date());const hr=(DB.attendance||[]).filter(a=>a.date===today&&['day','night','office','holiday','ot','callout'].includes(attKey(a))).length;
+  const today=iso(new Date());const hr=(DB.attendance||[]).filter(a=>a.date===today&&['day','night','otnight','office','holiday','ot','callout'].includes(attKey(a))).length;
   const low=(DB.parts||[]).filter(p=>+p.qty<=+(p.min||0)).length;
   return `<div class="grid kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px">
     ${kpiCard('Нээлттэй WO',open,'accent')}${kpiCard('Дууссан WO',closed,'ok')}${kpiCard('Хугацаа хэтэрсэн WO',overdue,'danger')}
@@ -543,7 +544,7 @@ function faultHeatmap(){const map={};(DB.wos||[]).filter(w=>w.fault&&inRange(w.d
     <div class="muted" style="font-size:11px;margin-top:6px">${RANGE.from} – ${RANGE.to} · улаан гүн = гэмтэл их · нийт ${days.reduce((s,x)=>s+x.c,0)} гэмтэл</div></div>`;}
 function todayWorkingPanel(){const today=iso(new Date());const recs=(DB.attendance||[]).filter(a=>a.date===today);
   const day=[],night=[];recs.forEach(a=>{const k=attKey(a);const s=(DB.staff||[]).find(x=>x.id===a.staffId);if(!s)return;
-    if(k==='night')night.push(s);else if(['day','office','holiday','ot','callout'].includes(k))day.push(s);});
+    if(k==='night'||k==='otnight')night.push(s);else if(['day','office','holiday','ot','callout'].includes(k))day.push(s);});
   const grp=arr=>{const m={};arr.forEach(s=>{(m[s.role]=m[s.role]||[]).push(s.name);});const ks=ROLES.map(r=>r[0]).filter(r=>m[r]);
     return ks.length?ks.map(r=>`<div style="margin:5px 0;font-size:13px"><span class="badge b-muted">${esc(roleLabel(r))}</span> ${m[r].map(esc).join(', ')}</div>`).join(''):'<div class="muted" style="padding:6px">Бүртгэл алга — Цаг бүртгэл дээр оруулна уу</div>';};
   return `<div class="grid col2" style="margin-bottom:16px">
@@ -553,7 +554,7 @@ function rangeLoadPanel(){if(RANGE.from===RANGE.to)return '';const recsAll=DB.at
   const rows=[];let d=new Date(RANGE.from),end=new Date(RANGE.to),g=0;
   while(d<=end&&g<62){const ds=iso(d);const recs=recsAll.filter(a=>a.date===ds);
     const dc=recs.filter(a=>['day','office','holiday','ot','callout'].includes(attKey(a))).length;
-    const nc=recs.filter(a=>attKey(a)==='night').length;
+    const nc=recs.filter(a=>['night','otnight'].includes(attKey(a))).length;
     const oc=recs.filter(a=>['rosteroff','shiftl','sick','leaveu','leavep','standby'].includes(attKey(a))).length;
     rows.push({ds,wk:new Date(ds).getDay(),dc,nc,oc});d.setDate(d.getDate()+1);g++;}
   const has=rows.some(r=>r.dc||r.nc||r.oc);
@@ -1712,7 +1713,7 @@ const ROSTER_CODES=[
  {c:'Ө',k:'day',lbl:'Өдөр (N)',tone:'#2fd07a',hrs:12},{c:'Ш',k:'night',lbl:'Шөнө (N/8)',tone:'#2e8bff',hrs:12},
  {c:'а',k:'rosteroff',lbl:'Ростер амралт',tone:'#5b6680',hrs:0},{c:'эа',k:'shiftl',lbl:'Ээлжийн амралт',tone:'#7a869c',hrs:0},
  {c:'Нс',k:'ot',lbl:'Илүү цаг/сунаж',tone:'#ffb020',hrs:12},{c:'Нд',k:'callout',lbl:'Дуудагдсан',tone:'#ff7a45',hrs:12},
- {c:'Шс',k:'ot',lbl:'Шөнийн сунаж',tone:'#e8992d',hrs:12},
+ {c:'Шс',k:'otnight',lbl:'Шөнийн сунаж',tone:'#e8992d',hrs:12},
  {c:'Нб',k:'holiday',lbl:'Баярын цаг',tone:'#c77dff',hrs:12},{c:'Бс',k:'ot',lbl:'Баяраар сунаж',tone:'#d65db1',hrs:12},
  {c:'Нз',k:'road',lbl:'Замын цаг',tone:'#1ec8c8',hrs:10},{c:'ч',k:'leaveu',lbl:'Чөлөө',tone:'#9aa7bd',hrs:0},
  {c:'ө',k:'sick',lbl:'Өвчтэй',tone:'#ff4d4f',hrs:0},{c:'Т',k:'office',lbl:'Томилолт',tone:'#a78bfa',hrs:8}];
@@ -1787,6 +1788,7 @@ function attMonthSummary(m){const map={};(DB.staff||[]).forEach(s=>map[s.id]={ba
     else if(k==='night'){t.base+=Math.min(h,8);t.ot+=Math.max(h-8,0);t.night+=Math.min(h,nightPortionForDate(a.date));t.worked+=h;t.nightD++;}
     else if(k==='holiday'){t.holiday+=h;t.worked+=h;}
     else if(k==='ot'){t.ot+=h;t.worked+=h;}
+    else if(k==='otnight'){t.ot+=h;t.night+=Math.min(h,nightPortionForDate(a.date));t.worked+=h;}
     else if(k==='callout'){t.callout+=h;t.worked+=h;}
     else if(k==='road'||k==='roadh'){t.road+=h;}
     else if(k==='office'||k==='officea'){t.base+=Math.min(h,8);t.ot+=Math.max(h-8,0);t.office+=h;t.worked+=h;}
@@ -1828,7 +1830,7 @@ function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ 
         ${edit?'<button class="btn btn-sm" onclick="go(\'roster\')">🗓️ Ээлжийн төлөвлөлт</button>':''}
         <button class="btn btn-sm btn-ghost" onclick="exportAttend()">📤 Excel татах</button></div></div>
     <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
-      ${kpiCard('Өнөөдөр өдрөөр',tc(['day']),'ok')}${kpiCard('Өнөөдөр шөнөөр',tc(['night']),'accent')}
+      ${kpiCard('Өнөөдөр өдрөөр',tc(['day']),'ok')}${kpiCard('Өнөөдөр шөнөөр',tc(['night','otnight']),'accent')}
       ${kpiCard('Илүү/дуудлага',tc(['ot','callout']),'warn')}${kpiCard('Өвчтэй',tc(['sick']),'danger')}${kpiCard('Амралт (эа/а)',tc(['shiftl','rosteroff']),'muted')}</div>
     <div class="glass card" style="margin-bottom:14px"><div style="font-size:11.5px;line-height:2">${legend}</div></div>
     <div class="glass card" style="padding:0;overflow:auto;margin-bottom:16px"><table style="border-collapse:collapse"><thead><tr>${head}</tr></thead><tbody>${grid}</tbody></table></div>
@@ -2191,7 +2193,7 @@ function renderSearch(q){const el=document.getElementById('gsRes');if(!el)return
 /* ---- Тайлан төв (Sprint 10) ---- */
 function attRangeSummary(from,to){const map={};(DB.staff||[]).forEach(s=>map[s.id]={name:s.name,role:s.role,shift:s.shift,ot:0,callout:0,night:0});
   (DB.attendance||[]).filter(a=>a.date>=from&&a.date<=to).forEach(a=>{const t=map[a.staffId];if(!t)return;const k=attKey(a);const h=+a.hours||0;
-    if(k==='ot')t.ot+=h;else if(k==='callout')t.callout+=h;else if(k==='night')t.night+=Math.min(h,nightPortionForDate(a.date));});
+    if(k==='ot')t.ot+=h;else if(k==='otnight'){t.ot+=h;t.night+=Math.min(h,nightPortionForDate(a.date));}else if(k==='callout')t.callout+=h;else if(k==='night')t.night+=Math.min(h,nightPortionForDate(a.date));});
   return map;}
 function viewReport2(){const k=kpis();const nar=DB.naryad||[];const open=nar.filter(w=>!WO_DONE(w)&&w.status!=='Cancelled').length,closed=nar.filter(WO_DONE).length;
   const m=attMonth();const att=attMonthSummary(m);const attTot=Object.values(att).reduce((s,t)=>s+(t.worked||0),0);
