@@ -44,6 +44,7 @@
   body.navcol .qa{width:auto;padding:8px}
   body.navcol .qa .qal{display:none}
   .home-tile{transition:.18s} .home-tile:hover{border-color:var(--accent)!important;transform:translateY(-2px);background:rgba(46,139,255,.08)}
+  .home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
   nav{flex:1;overflow:auto;padding:8px 8px 4px}
   .navgrp-h{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;padding:12px 10px 5px;cursor:pointer;transition:.15s}
   .navgrp-h:hover{color:var(--text)}
@@ -85,7 +86,8 @@
   .grid{display:grid;gap:12px}
   .kpis{grid-template-columns:repeat(6,1fr)}
   @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
-  @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)} aside{position:fixed;left:-280px;z-index:50;transition:left .25s} aside.open{left:0;box-shadow:0 0 0 100vmax rgba(0,0,0,.5)} body.navcol aside{width:260px} .menu-btn{display:block!important} .navcolbtn{display:none!important} .col3,.col2{grid-template-columns:1fr!important}}
+  @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)} aside{position:fixed;left:-280px;z-index:50;transition:left .25s} aside.open{left:0;box-shadow:0 0 0 100vmax rgba(0,0,0,.5)} body.navcol aside{width:260px} .menu-btn{display:block!important} .navcolbtn{display:none!important} .col3,.col2{grid-template-columns:1fr!important}
+    .datefld{display:none!important} header{gap:8px;padding:10px 12px} #title{font-size:16px} .home-grid{grid-template-columns:1fr 1fr;gap:10px} .home-tile{padding:16px 12px!important} .content{padding:12px!important}}
   .card{padding:16px;position:relative;overflow:hidden;animation:rise .35s both}
   @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
   .kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
@@ -165,8 +167,8 @@
         <button class="btn btn-sm btn-ghost" onclick="openSearch()" title="Хайлт (Ctrl+K)">🔍 Хайх</button>
         <button class="btn btn-sm btn-ghost" id="themeBtn" onclick="toggleTheme()" title="Theme">🌙</button>
         <div class="seg" id="presets"></div>
-        <input type="date" id="dFrom" style="width:auto" onchange="setCustom()"><span class="muted">—</span>
-        <input type="date" id="dTo" style="width:auto" onchange="setCustom()">
+        <span class="datefld"><input type="date" id="dFrom" style="width:auto" onchange="setCustom()"><span class="muted">—</span>
+        <input type="date" id="dTo" style="width:auto" onchange="setCustom()"></span>
       </div>
     </header>
     <div class="content" id="view"></div>
@@ -421,8 +423,8 @@ function navOpenState(){if(!window._navOpen){try{window._navOpen=JSON.parse(loca
 function toggleNavGroup(id){const s=navOpenState();s[id]=!s[id];localStorage.setItem('navOpen',JSON.stringify(s));renderNav();}
 function toggleNavCol(){document.body.classList.toggle('navcol');localStorage.setItem('navcol',document.body.classList.contains('navcol')?'1':'0');}
 const QUICK_ACTIONS=[['inspect','📱','QR Үзлэг хийх','QR'],['new','⚡','Гэмтэл бүртгэх','Гэмтэл'],['wo2','➕','Шинэ Work Order','WO'],['loto','🔒','LOTO үүсгэх','LOTO']];
-// Талбайн ажилтан (энгийн горим): удирдлагын цэс харуулахгүй
-function isWorker(){return ME&&['AUTO_TECH','ISO_TECH','ELEC','ELEC_ASST','VIEWER'].includes(ME.role);}
+// Талбайн ажилтан (энгийн горим): "Тусгаарлалтын техникч"-ээс доош бүх албан тушаал
+function isWorker(){if(!ME||ME.role==='ADMIN')return false;const idx=ROLES.findIndex(r=>r[0]===ME.role);const iso=ROLES.findIndex(r=>r[0]==='ISO_TECH');return idx>=0&&iso>=0&&idx>=iso;}
 const WORKER_HIDE_GROUPS=['sys','en'];   // ажилтнаас нуух бүлгүүд
 function renderNav(){const un=myUnread();const avail=pages();const byKey={};avail.forEach(p=>byKey[p[0]]=p);const open=navOpenState();const worker=isWorker();
   const link=(k,lbl,ic)=>{const badge=(k==='notifs'&&un>0)?`<span class="nbadge">${un}</span>`:'';return `<a class="${CUR===k?'active':''}" onclick="go('${k}')" title="${esc(lbl)}"><span class="ico">${ic}</span><span class="lbl">${esc(lbl)}</span>${badge}</a>`;};
@@ -454,7 +456,7 @@ function viewHome(){const avail=pages();const has=k=>avail.some(p=>p[0]===k);con
   return `<div style="max-width:960px;margin:0 auto">
     <div style="font-size:22px;font-weight:800;margin:4px 0 2px">Сайн байна уу, ${esc((ME&&ME.name)||'')} 👋</div>
     <div class="muted" style="margin-bottom:20px">Юу хиймээр байна? Доорхоос нэгийг сонгоно уу.</div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px">
+    <div class="home-grid">
     ${tiles.map(t=>`<button onclick="go('${t[0]}')" class="glass card home-tile" style="text-align:left;cursor:pointer;padding:20px 18px">
       <div style="width:46px;height:46px;border-radius:12px;background:${t[4]}22;color:${t[4]};display:grid;place-items:center;font-size:26px">${t[1]}</div>
       <div style="font-weight:700;font-size:15px;margin-top:12px">${esc(t[2])}</div>
