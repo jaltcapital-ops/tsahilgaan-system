@@ -37,9 +37,13 @@
   .navcolbtn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;width:28px;height:28px;flex-shrink:0;transition:.2s}
   .navcolbtn:hover{background:rgba(46,139,255,.15);color:var(--accent)}
   body.navcol .brand .bx,body.navcol .navcolbtn{display:none}
-  .qa-bar{display:flex;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap;justify-content:center}
-  .qa{width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer;display:grid;place-items:center;font-size:16px;transition:.2s}
-  .qa:hover{background:rgba(46,139,255,.18);border-color:var(--accent);transform:translateY(-1px)}
+  .qa-bar{display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--line);flex-wrap:wrap;justify-content:center}
+  .qa{display:flex;flex-direction:column;align-items:center;gap:3px;width:68px;padding:9px 4px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer;font-size:22px;transition:.2s}
+  .qa .qal{font-size:9.5px;line-height:1.1;text-align:center;color:var(--muted);font-weight:600}
+  .qa:hover{background:rgba(46,139,255,.18);border-color:var(--accent);transform:translateY(-2px)}
+  body.navcol .qa{width:auto;padding:8px}
+  body.navcol .qa .qal{display:none}
+  .home-tile{transition:.18s} .home-tile:hover{border-color:var(--accent)!important;transform:translateY(-2px);background:rgba(46,139,255,.08)}
   nav{flex:1;overflow:auto;padding:8px 8px 4px}
   .navgrp-h{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;padding:12px 10px 5px;cursor:pointer;transition:.15s}
   .navgrp-h:hover{color:var(--text)}
@@ -416,23 +420,49 @@ const NAV_OPEN_DEFAULT={ctl:true,work:false,eqp:true,en:false,hr:false,sys:false
 function navOpenState(){if(!window._navOpen){try{window._navOpen=JSON.parse(localStorage.getItem('navOpen'))||null;}catch(e){}if(!window._navOpen)window._navOpen=Object.assign({},NAV_OPEN_DEFAULT);}return window._navOpen;}
 function toggleNavGroup(id){const s=navOpenState();s[id]=!s[id];localStorage.setItem('navOpen',JSON.stringify(s));renderNav();}
 function toggleNavCol(){document.body.classList.toggle('navcol');localStorage.setItem('navcol',document.body.classList.contains('navcol')?'1':'0');}
-const QUICK_ACTIONS=[['wo2','➕','Шинэ Work Order'],['new','⚡','Гэмтэл бүртгэх'],['inspect','📱','QR Үзлэг хийх'],['loto','🔒','LOTO үүсгэх']];
-function renderNav(){const un=myUnread();const avail=pages();const byKey={};avail.forEach(p=>byKey[p[0]]=p);const open=navOpenState();
+const QUICK_ACTIONS=[['inspect','📱','QR Үзлэг хийх','QR'],['new','⚡','Гэмтэл бүртгэх','Гэмтэл'],['wo2','➕','Шинэ Work Order','WO'],['loto','🔒','LOTO үүсгэх','LOTO']];
+// Талбайн ажилтан (энгийн горим): удирдлагын цэс харуулахгүй
+function isWorker(){return ME&&['AUTO_TECH','ISO_TECH','ELEC','ELEC_ASST','VIEWER'].includes(ME.role);}
+const WORKER_HIDE_GROUPS=['sys','en'];   // ажилтнаас нуух бүлгүүд
+function renderNav(){const un=myUnread();const avail=pages();const byKey={};avail.forEach(p=>byKey[p[0]]=p);const open=navOpenState();const worker=isWorker();
   const link=(k,lbl,ic)=>{const badge=(k==='notifs'&&un>0)?`<span class="nbadge">${un}</span>`:'';return `<a class="${CUR===k?'active':''}" onclick="go('${k}')" title="${esc(lbl)}"><span class="ico">${ic}</span><span class="lbl">${esc(lbl)}</span>${badge}</a>`;};
-  let html='';
-  NAV_MENU.forEach(g=>{const items=g.items.filter(it=>byKey[it[0]]);if(!items.length)return;const isOpen=open[g.id]!==false;
+  // Нүүр (энгийн товч самбар) — эхэнд
+  let html=`<a class="${CUR==='home'?'active':''}" onclick="go('home')" title="Нүүр" style="margin-bottom:6px"><span class="ico">🏠</span><span class="lbl">Нүүр</span></a>`;
+  NAV_MENU.forEach(g=>{if(worker&&WORKER_HIDE_GROUPS.includes(g.id))return;const items=g.items.filter(it=>byKey[it[0]]);if(!items.length)return;const isOpen=open[g.id]!==false;
     html+=`<button class="navgrp-h ${isOpen?'':'closed'}" onclick="toggleNavGroup('${g.id}')"><span class="gico">${g.gico}</span><span class="lbl">${esc(g.label)}</span><span class="chev">▼</span></button>
       <div class="navgrp-items ${isOpen?'':'closed'}">${items.map(it=>link(it[0],it[1],it[2])).join('')}</div>`;});
   document.getElementById('nav').innerHTML=html;
-  // Quick actions
-  const qa=document.getElementById('qaBar');if(qa)qa.innerHTML=QUICK_ACTIONS.filter(a=>byKey[a[0]]).map(a=>`<button class="qa" onclick="go('${a[0]}')" title="${esc(a[2])}">${a[1]}</button>`).join('');
+  // Quick actions (icon + шошго)
+  const qa=document.getElementById('qaBar');if(qa)qa.innerHTML=QUICK_ACTIONS.filter(a=>byKey[a[0]]).map(a=>`<button class="qa" onclick="go('${a[0]}')" title="${esc(a[2])}">${a[1]}<span class="qal">${esc(a[3])}</span></button>`).join('');
   // Footer
   const fb=document.getElementById('footBtns');if(fb){const canRef=!!byKey['ref'];fb.innerHTML=(canRef?`<button class="fbtn" onclick="go('ref')" title="Тохиргоо">⚙️ <span class="lbl">Тохиргоо</span></button>`:'')+`<button class="fbtn" onclick="logout()" title="Гарах">🚪 <span class="lbl">Гарах</span></button>`;}
   const av=document.getElementById('uAv');if(av&&ME)av.textContent=(ME.name||'?').trim().charAt(0).toUpperCase();
   document.getElementById('title').textContent=(avail.find(p=>p[0]===CUR)||['','Нүүр'])[1];}
 
 /* ============ Render ============ */
+function viewHome(){const avail=pages();const has=k=>avail.some(p=>p[0]===k);const un=myUnread();
+  const tiles=[
+    ['inspect','📱','QR Үзлэг хийх','Тоног / PD уншуулж үзлэг хийх','#2e8bff'],
+    ['wo2','📋','Миний Work Order','Надад оноогдсон наряд','#7c4dff'],
+    ['new','⚡','Гэмтэл бүртгэх','Шинэ гэмтэл / ажил','#ffb020'],
+    ['faults','⚠️','Цахилгааны гэмтэл','Идэвхтэй гэмтэл харах','#ff4d4f'],
+    ['loto','🔒','LOTO','Тусгаарлалт бүртгэх','#1ec8c8'],
+    ['notifs','🔔','Мэдэгдэл'+(un?' ('+un+')':''),'Танд ирсэн мэдэгдэл','#2fd07a'],
+    ['equip','⚙️','Тоног төхөөрөмж','Каталог / QR','#8ea2c0'],
+    ['daily','📄','Өдөр тутмын тайлан','Ээлжийн тайлан','#7c9cff'],
+  ].filter(t=>has(t[0]));
+  return `<div style="max-width:960px;margin:0 auto">
+    <div style="font-size:22px;font-weight:800;margin:4px 0 2px">Сайн байна уу, ${esc((ME&&ME.name)||'')} 👋</div>
+    <div class="muted" style="margin-bottom:20px">Юу хиймээр байна? Доорхоос нэгийг сонгоно уу.</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px">
+    ${tiles.map(t=>`<button onclick="go('${t[0]}')" class="glass card home-tile" style="text-align:left;cursor:pointer;padding:20px 18px">
+      <div style="width:46px;height:46px;border-radius:12px;background:${t[4]}22;color:${t[4]};display:grid;place-items:center;font-size:26px">${t[1]}</div>
+      <div style="font-weight:700;font-size:15px;margin-top:12px">${esc(t[2])}</div>
+      <div class="muted" style="font-size:12px;margin-top:3px">${esc(t[3])}</div></button>`).join('')}
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:20px">💡 Бүх цэс зүүн талын цэсэнд байна. Дэлгэрэнгүй хяналт — Dashboard.</div></div>`;}
 function render(){const v=document.getElementById('view');
+  if(CUR==='home'){v.innerHTML=viewHome();return;}
   if(CUR==='dash'){v.innerHTML=viewDash();drawCharts();}
   else if(CUR==='new')v.innerHTML=viewNew();
   else if(CUR==='energy'){v.innerHTML=viewEnergy();drawEnergyChart();}
@@ -2303,6 +2333,7 @@ function startApp(){document.getElementById('login').classList.add('hidden');
   if(localStorage.getItem('navcol')==='1')document.body.classList.add('navcol');
   try{ensurePerms();}catch(e){}
   try{ensureStaff();ensurePdEquip();}catch(e){}
+  if(isWorker())CUR='home';   // талбайн ажилтан → энгийн нүүр
   applyTheme();startNotifPoll();
   renderNav();renderPresets();syncDates();render();
   try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd'),wo=sp.get('wo');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}else if(wo){go('wo2');setTimeout(()=>{const w=woFind(+wo);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},300);}}catch(e){}}
