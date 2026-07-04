@@ -408,7 +408,8 @@ function pages(){let p=[...BASE_PAGES];
   if(canSeeAttend()){const i=p.findIndex(x=>x[0]==='hr');const ins=[['attend','Цаг бүртгэл','🕒']];if(canEditAttend())ins.push(['roster','Ээлжийн төлөвлөлт','🗓️']);p.splice(i>=0?i+1:p.length,0,...ins);}
   if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥'],['perms','Эрхийн тохиргоо','🛡️'],['audit','Аудит бүртгэл','📜']);return p;}
 let CUR='dash';
-function go(p){CUR=p;document.getElementById('side').classList.remove('open');renderNav();render();}
+function go(p){if(p!==CUR)window._prevCUR=CUR;CUR=p;document.getElementById('side').classList.remove('open');renderNav();render();}
+function goBack(){const b=(window._prevCUR&&window._prevCUR!=='passport'&&window._prevCUR!=='pdpass')?window._prevCUR:(isWorker()?'home':'dash');go(b);}
 /* ==== Sidebar config — шинэ цэс нэмэхэд энэ массивт нэг мөр нэмнэ ==== */
 const NAV_MENU=[
   {id:'ctl', gico:'📊', label:'Хяналт', items:[['dash','Dashboard','📊'],['notifs','Мэдэгдэл','🔔'],['news','Шинэ мэдээ','📰']]},
@@ -423,8 +424,8 @@ function navOpenState(){if(!window._navOpen){try{window._navOpen=JSON.parse(loca
 function toggleNavGroup(id){const s=navOpenState();s[id]=!s[id];localStorage.setItem('navOpen',JSON.stringify(s));renderNav();}
 function toggleNavCol(){document.body.classList.toggle('navcol');localStorage.setItem('navcol',document.body.classList.contains('navcol')?'1':'0');}
 const QUICK_ACTIONS=[['inspect','📱','QR Үзлэг хийх','QR'],['new','⚡','Гэмтэл бүртгэх','Гэмтэл'],['wo2','➕','Шинэ Work Order','WO'],['loto','🔒','LOTO үүсгэх','LOTO']];
-// Талбайн ажилтан (энгийн горим): "Тусгаарлалтын техникч"-ээс доош бүх албан тушаал
-function isWorker(){if(!ME||ME.role==='ADMIN')return false;const idx=ROLES.findIndex(r=>r[0]===ME.role);const iso=ROLES.findIndex(r=>r[0]==='ISO_TECH');return idx>=0&&iso>=0&&idx>=iso;}
+// Талбайн ажилтан (энгийн горим): "Тусгаарлалтын техникч"-ээс доош, гэхдээ автомат ахлах/инженер удирдлагыг оруулахгүй
+function isWorker(){if(!ME||ME.role==='ADMIN')return false;if(['AUTO_CHIEF','AUTO_EE'].includes(ME.role))return false;const idx=ROLES.findIndex(r=>r[0]===ME.role);const iso=ROLES.findIndex(r=>r[0]==='ISO_TECH');return idx>=0&&iso>=0&&idx>=iso;}
 const WORKER_HIDE_GROUPS=['sys','en'];   // ажилтнаас нуух бүлгүүд
 function renderNav(){const un=myUnread();const avail=pages();const byKey={};avail.forEach(p=>byKey[p[0]]=p);const open=navOpenState();const worker=isWorker();
   const link=(k,lbl,ic)=>{const badge=(k==='notifs'&&un>0)?`<span class="nbadge">${un}</span>`:'';return `<a class="${CUR===k?'active':''}" onclick="go('${k}')" title="${esc(lbl)}"><span class="ico">${ic}</span><span class="lbl">${esc(lbl)}</span>${badge}</a>`;};
@@ -618,40 +619,47 @@ function drawCharts(){destroyCharts();const t=trend(),tc=workTypeCounts(),te=top
 }
 
 /* ---- Шинэ мэдээ ---- */
-function viewNew(){window._newPhotos=[];return `${dataListEquip()}${dataListPd()}<form onsubmit="saveReport(event)" style="max-width:900px">
+function viewNew(){window._newPhotos=[];return `${dataListEquip()}${dataListPd()}<form onsubmit="saveFault(event)" style="max-width:640px;margin:0 auto">
   <div class="glass card" style="margin-bottom:16px">
-    <div class="section-title">🗓️ Ерөнхий мэдээлэл <span class="badge b-accent" style="margin-left:auto">Авто дугаар + timestamp</span></div>
-    <div class="col3">
-      <label class="field"><span>Огноо *</span><input type="date" id="f_date" required value="${iso(new Date())}"></label>
-      <label class="field"><span>Ээлж *</span><select id="f_shift" required><option value="">—</option>${optList(['А','Б','В','Г'])}</select></label>
-      <label class="field"><span>Өдөр / Шөнө *</span><select id="f_dn">${optList(SHIFT_DN)}</select></label>
-      <label class="field"><span>Хүн тоо</span><input type="number" id="f_head" value="1" min="0"></label>
-      <label class="field"><span>Ажилласан шугам</span><input type="number" id="f_lines" value="2" min="0"></label><div></div>
-    </div></div>
-  <div class="glass card" style="margin-bottom:16px">
-    <div class="section-title">🔧 Хийсэн ажил / Ажлын тайлан</div>
-    <div class="col3">
-      <label class="field"><span>Тоног төхөөрөмж / TAG (Position No)</span><input id="w_equip" list="equipList" placeholder="ж: MG-101 (бичихэд санал гарна)"></label>
-      <label class="field"><span>PD дугаар</span><input id="w_pd" list="pdList" placeholder="ж: 31PD-01 (бичихэд санал гарна)"></label>
-      <label class="field"><span>Байршил</span><select id="w_area"><option value="">—</option>${optList(DB.areas)}</select></label>
-      <label class="field"><span>Ажлын төрөл *</span><select id="w_type" required><option value="">—</option>${optList(DB.types)}</select></label>
-      <label class="field"><span>Priority *</span><select id="w_prio" required><option value="">—</option>${optList(PRIOS)}</select></label>
-      <label class="field"><span>Статус *</span><select id="w_status" required><option value="">—</option>${optList(STATUSES)}</select></label>
-      <label class="field"><span>Хариуцагч инженер</span><select id="w_eng"><option value="">—</option>${optList(DB.engineers)}</select></label>
-      <label class="field" style="grid-column:span 3"><span>Ажлын тайлбар *</span><textarea id="w_desc" rows="2" required></textarea></label>
-      <label class="field"><span>Эвдрэл эсэх</span><div><label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="w_fault" style="width:auto" onchange="faultToggle(this)"> Тийм, энэ нь эвдрэл</label></div></label>
-      <label class="field"><span id="startLbl">Start time (эхэлсэн)</span><input type="datetime-local" id="w_start" onchange="calcDown()"></label>
-      <label class="field" id="finishWrap"><span>Finish time (дуссан)</span><input type="datetime-local" id="w_finish" onchange="calcDown()"></label>
-      <div id="faultBox" class="hidden row2" style="grid-column:span 3">
-        <label class="field"><span>Root Cause</span><input id="w_root"></label>
-        <label class="field"><span>Action Taken</span><input id="w_action"></label></div>
+    <div class="section-title">⚡ Гэмтэл бүртгэх</div>
+    <div class="col2">
+      <label class="field"><span>Тоног төхөөрөмж / TAG</span><input id="w_equip" list="equipList" placeholder="ж: MG-101"></label>
+      <label class="field"><span>PD дугаар</span><input id="w_pd" list="pdList" placeholder="ж: 31PD-01"></label>
     </div>
-    <label class="field" style="grid-column:span 3;margin-top:6px"><span>📷 Зураг хавсаргах (камер / файл — олон зураг)</span>
-      <input type="file" accept="image/*" multiple onchange="handlePhotos(this)">
-      <div id="photoPrev" style="margin-top:6px"></div></label>
-    <div class="note" style="margin-top:12px">Авто тооцоо: Downtime = <b id="downPrev">— (Start/Finish оруулна уу)</b> · Эгзэгтэй/Өндөр гэмтэл бол Telegram мэдэгдэл илгээнэ.</div>
-  </div>
-  <button class="btn">Хадгалах</button></form>`;}
+    <label class="field" style="margin-top:10px"><span>Юу эвдэрсэн бэ? *</span><textarea id="w_desc" rows="3" required placeholder="Гэмтлийн тайлбар — юу эвдэрсэн, ямар байдалтай байгаа..."></textarea></label>
+    <div style="margin-top:12px"><span class="muted" style="font-size:13px">Ноцтой байдал (Priority) *</span>
+      <div id="prioSeg" style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+        ${[['Эгзэгтэй','#ff4d4f'],['Өндөр','#ffb020'],['Дунд','#2e8bff'],['Бага','#8ea2c0']].map(([p,c])=>`<button type="button" class="prio-btn${p==='Өндөр'?' on':''}" data-p="${p}" data-c="${c}" onclick="prioPick(this)" style="border:2px solid ${p==='Өндөр'?c:'var(--line)'};color:${p==='Өндөр'?'#fff':'var(--muted)'};background:${p==='Өндөр'?c:'transparent'};border-radius:9px;padding:8px 16px;font-weight:700;cursor:pointer;transition:.15s">${p}</button>`).join('')}
+      </div><input type="hidden" id="w_prio" value="Өндөр"></div>
+    <label class="field" style="margin-top:12px"><span>📷 Зураг хавсаргах (камер / галерей)</span>
+      <input type="file" accept="image/*" multiple onchange="handlePhotos(this)"><div id="photoPrev" style="margin-top:6px"></div></label>
+    <details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px;color:var(--muted)">⚙️ Нэмэлт (заавал биш)</summary>
+      <div class="col2" style="margin-top:10px">
+        <label class="field"><span>Эхэлсэн цаг</span><input type="datetime-local" id="w_start" value="${new Date().toISOString().slice(0,16)}"></label>
+        <label class="field"><span>Байршил</span><select id="w_area"><option value="">—</option>${optList(DB.areas)}</select></label>
+        <label class="field" style="grid-column:span 2"><span>Шалтгаан (Root Cause)</span><input id="w_root" placeholder="мэдэж байвал"></label>
+      </div></details>
+    <div style="margin-top:16px"><button class="btn" style="width:100%;font-size:15px;padding:12px">⚡ Гэмтэл бүртгэх</button>
+      <div class="muted" style="font-size:11px;text-align:center;margin-top:8px">Эгзэгтэй/Өндөр гэмтэл бол Telegram-д автоматаар мэдэгдэнэ · Засварыг дараа нь "Цахилгааны гэмтэл" цэснээс дуусгана</div></div>
+  </div></form>`;}
+function prioPick(btn){document.querySelectorAll('#prioSeg .prio-btn').forEach(b=>{b.classList.remove('on');b.style.background='transparent';b.style.color='var(--muted)';b.style.borderColor='var(--line)';});
+  const c=btn.getAttribute('data-c');btn.classList.add('on');btn.style.background=c;btn.style.color='#fff';btn.style.borderColor=c;
+  document.getElementById('w_prio').value=btn.getAttribute('data-p');}
+function saveFault(e){e.preventDefault();
+  const equip=val('w_equip').trim(),pd=val('w_pd').trim(),desc=val('w_desc').trim();
+  if(!desc){toast('Гэмтлийн тайлбар оруулна уу');return;}
+  if(!equip&&!pd){toast('Тоног эсвэл PD дугаар оруулна уу');return;}
+  const prio=(document.getElementById('w_prio')||{}).value||'Өндөр';
+  const startEl=document.getElementById('w_start');const start=(startEl&&startEl.value)||new Date().toISOString().slice(0,16);
+  const area=(document.getElementById('w_area')||{}).value||'';const root=(document.getElementById('w_root')||{}).value||'';
+  if(!DB.wos)DB.wos=[];if(!DB.seq.wo)DB.seq.wo=0;
+  const w={id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:null,date:iso(new Date()),
+    equip:equip||pd,pd:pd||((DB.equip.find(x=>x.tag===equip)||{}).pd||''),area,type:'Шуурхай дуудлага',prio,status:'Нээлттэй',
+    desc,fault:true,fstate:'Эвдрэлтэй',root,action:'',start,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()};
+  DB.wos.push(w);window._newPhotos=[];audit('Гэмтэл бүртгэв',(equip||pd||'')+' · '+desc);
+  notify('⚡ ГЭМТЭЛ ('+prio+')\nТоног: '+(equip||pd||'—')+'\nТайлбар: '+desc+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
+  pushNotif('*','⚡ Гэмтэл: '+(equip||pd||'')+' — '+desc);notifyBrowser('⚡ Гэмтэл бүртгэгдлээ',(equip||pd||'')+' '+desc);
+  save();toast('Гэмтэл бүртгэгдлээ ✓');go('faults');}
 function faultToggle(cb){document.getElementById('faultBox').classList.toggle('hidden',!cb.checked);
   // Гэмтэл бол финиш цагийг нуух (засварласан үед оруулна), старт цагийг одоо болгож бөглөх
   const fw=document.getElementById('finishWrap');if(fw)fw.classList.toggle('hidden',cb.checked);
@@ -1220,7 +1228,8 @@ function showPdQR(pd){if(typeof qrcode==='undefined'){toast('QR сан алга'
   w.document.close();w.focus();setTimeout(function(){w.print();},400);}
 function viewPdPassport(){const pd=window._pdTag;
   const equips=DB.equip.filter(e=>e.pd===pd);const works=DB.wos.filter(w=>w.pd===pd).sort((a,b)=>a.date<b.date?1:-1);const faults=works.filter(w=>w.fault);
-  return `<div class="glass card" style="margin-bottom:16px">
+  return `<button class="btn btn-ghost" style="margin-bottom:12px" onclick="goBack()">← Нүүр рүү буцах</button>
+  <div class="glass card" style="margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <div style="font-size:22px;font-weight:700;font-family:monospace" class="t-teal">🔌 ${esc(pd)}</div><span class="muted">PD дугаар (тэжээлийн цэг)</span>
       <button class="btn btn-sm" style="margin-left:auto" onclick="showPdQR('${esc(pd)}')">🔲 QR хэвлэх</button></div>
@@ -1374,7 +1383,8 @@ function viewPassport(){const tag=window._eqTag;const e=DB.equip.find(x=>x.tag==
   const works=DB.wos.filter(w=>w.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
   const faults=works.filter(w=>w.fault);const insp=(DB.inspections||[]).filter(i=>i.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
   const tb={'Эгзэгтэй':'b-danger','Өндөр':'b-warn','Дунд':'b-accent','Бага':'b-muted'}[e.crit]||'b-muted';
-  return `<div class="glass card" style="margin-bottom:16px">
+  return `<button class="btn btn-ghost" style="margin-bottom:12px" onclick="goBack()">← Нүүр рүү буцах</button>
+  <div class="glass card" style="margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <div style="font-size:22px;font-weight:700;font-family:monospace" class="t-accent">${esc(e.tag)}</div>
       ${e.crit?`<span class="badge ${tb}">${esc(e.crit)}</span>`:''}<span class="muted">${esc(e.name||'')}</span>
@@ -1909,8 +1919,10 @@ function woAccept(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toa
 function woStart(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}if(!w.sessions)w.sessions=[];w.runningSince=new Date().toISOString().slice(0,16);w.status='In Progress';if(!w.actualStart)w.actualStart=w.runningSince;save();toast('Ажил эхэллээ ▶');render();}
 function woPause(id){const w=woFind(id);if(!w)return;if(w.runningSince){w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}w.status='On Hold';save();toast('Түр зогссон ⏸');render();}
 function woResume(id){const w=woFind(id);if(!w)return;w.runningSince=new Date().toISOString().slice(0,16);w.status='In Progress';save();toast('Үргэлжиллээ ▶');render();}
-function approveWO(id){const w=woFind(id);if(!w)return;if(!can('wo_close')){toast('Батлах эрхгүй');return;}w.status='Completed';w.finishedAt=w.completedAt||new Date().toISOString().slice(0,16);audit('Наряд баталгаажуулав',w.no);save();toast('Баталгаажлаа ✓');render();}
-function rejectWO(id){const w=woFind(id);if(!w)return;if(!can('wo_close')){toast('Эрхгүй');return;}const r=prompt('Татгалзах шалтгаан:');if(r===null)return;w.status='In Progress';w.rejectNote=r;w.completedAt='';audit('Наряд татгалзав',w.no+' · '+r);save();toast('Татгалзаж, In Progress болголоо');render();}
+function approveWO(id){const w=woFind(id);if(!w)return;if(!can('wo_close')){toast('Батлах эрхгүй');return;}w.status='Completed';w.finishedAt=w.completedAt||new Date().toISOString().slice(0,16);audit('Наряд баталгаажуулав',w.no);
+  const link=location.origin+'/?wo='+w.id;(w.assigneeNames||[]).forEach(nm=>pushNotif(nm,'✅ Таны наряд БАТЛАГДЛАА: '+(w.title||w.no),link));save();toast('Баталгаажлаа ✓');render();}
+function rejectWO(id){const w=woFind(id);if(!w)return;if(!can('wo_close')){toast('Эрхгүй');return;}const r=prompt('Дахин хийх шалтгаан / тайлбар:');if(r===null)return;w.status='In Progress';w.rejectNote=r;w.completedAt='';audit('Наряд буцаав',w.no+' · '+r);
+  const link=location.origin+'/?wo='+w.id;(w.assigneeNames||[]).forEach(nm=>pushNotif(nm,'↩️ Наряд БУЦААГДЛАА — дахин хийнэ үү: '+(w.title||w.no)+'\nШалтгаан: '+r,link));notify('↩️ Наряд буцаагдлаа\n'+(w.title||w.no)+'\nШалтгаан: '+r+'\nГүйцэтгэгч: '+((w.assigneeNames||[]).join(', ')));save();toast('Буцааж, дахин хийхээр илгээлээ');render();}
 function closeWO(id){const w=woFind(id);if(!w)return;if(!can('wo_close')){toast('Эрхгүй');return;}w.status='Closed';audit('Наряд хаав',w.no);save();toast('Хаагдлаа ✓');render();}
 function woComplete(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){toast('Зөвхөн оноогдсон ажилтан');return;}window._newPhotos=[];window._woParts=[];window._woFiles=[];
   const partsOpts=(DB.parts||[]).map(p=>`<option value="${p.id}">${esc(p.name)} (${num(p.qty)} ${esc(p.unit||'ш')})</option>`).join('');
@@ -1973,7 +1985,7 @@ function woControls(w){const b=[];const mine=isAssignedToMe(w);
   if(mine&&w.status==='Accepted')b.push(`<button class="btn btn-sm" onclick="woStart(${w.id})">▶ Эхлэх</button>`);
   if(mine&&w.status==='In Progress'){b.push(`<button class="btn btn-sm btn-ghost" onclick="woPause(${w.id})">⏸ Зогсоох</button>`);b.push(`<button class="btn btn-sm" onclick="woComplete(${w.id})">✅ Дуусгах</button>`);}
   if(mine&&w.status==='On Hold'){b.push(`<button class="btn btn-sm" onclick="woResume(${w.id})">▶ Үргэлжлүүлэх</button>`);b.push(`<button class="btn btn-sm" onclick="woComplete(${w.id})">✅ Дуусгах</button>`);}
-  if(can('wo_close')&&w.status==='Waiting Approval'){b.push(`<button class="btn btn-sm" onclick="approveWO(${w.id})">✔ Батлах</button>`);b.push(`<button class="btn btn-sm btn-ghost" onclick="rejectWO(${w.id})">✖ Татгалзах</button>`);}
+  if(can('wo_close')&&w.status==='Waiting Approval'){b.push(`<button class="btn btn-sm" onclick="approveWO(${w.id})">✔ Батлах</button>`);b.push(`<button class="btn btn-sm btn-ghost" onclick="rejectWO(${w.id})">↩ Буцаах (дахин хийх)</button>`);}
   if(can('wo_close')&&w.status==='Completed')b.push(`<button class="btn btn-sm btn-ghost" onclick="closeWO(${w.id})">🔒 Хаах</button>`);
   if(canCreateWo()&&!WO_DONE(w)&&w.status!=='Cancelled'&&w.status!=='Waiting Approval')b.push(`<button class="btn btn-sm btn-ghost" onclick="woCancel(${w.id})">✖ Цуцлах</button>`);
   b.push(`<button class="btn btn-sm btn-ghost" onclick="showWoQR(${w.id})">🔲 QR</button>`);
@@ -2338,7 +2350,8 @@ function startApp(){document.getElementById('login').classList.add('hidden');
   if(isWorker())CUR='home';   // талбайн ажилтан → энгийн нүүр
   applyTheme();startNotifPoll();
   renderNav();renderPresets();syncDates();render();
-  try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd'),wo=sp.get('wo');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}else if(wo){go('wo2');setTimeout(()=>{const w=woFind(+wo);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},300);}}catch(e){}}
+  try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd'),wo=sp.get('wo');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}else if(wo){go('wo2');setTimeout(()=>{const w=woFind(+wo);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},300);}
+    if(eq||pd||wo){try{history.replaceState({},'',location.pathname);}catch(e){}}}catch(e){}}   // QR параметр цэвэрлэх — дахин нээхэд Нүүр гарна
 async function init(){if(!TOKEN)return;
   try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
   catch{localStorage.removeItem('tk');TOKEN=null;}}
