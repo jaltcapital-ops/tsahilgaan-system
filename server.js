@@ -18,6 +18,35 @@ const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 try { fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true }); } catch { /* ignore */ }
 const SECRET = process.env.SECRET || 'tsahilgaan-secret-CHANGE-ME';
 const PORT = process.env.PORT || 4000;
+const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
+
+/* ---------- Имэйл (SMTP, сонголтоор) ---------- */
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
+const SMTP_SECURE = process.env.SMTP_SECURE === 'true' || SMTP_PORT === 465;
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
+let _mailer = null;
+async function getMailer() {
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
+  if (_mailer) return _mailer;
+  try {
+    const nodemailer = await import('nodemailer');
+    _mailer = nodemailer.default.createTransport({ host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_SECURE, auth: { user: SMTP_USER, pass: SMTP_PASS } });
+    return _mailer;
+  } catch { return null; }
+}
+async function sendMail(to, subject, html) {
+  if (!to) return { ok: false, skipped: true };
+  const m = await getMailer();
+  if (!m) return { ok: false, error: 'SMTP тохиргоо хийгдээгүй байна (SMTP_HOST/SMTP_USER/SMTP_PASS)' };
+  try { await m.sendMail({ from: SMTP_FROM, to, subject, html }); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+}
+function baseUrl(req) { return APP_URL || (req.protocol + '://' + req.get('host')); }
+function makeToken() { return crypto.randomBytes(24).toString('hex'); }
+function hashToken(t) { return crypto.createHash('sha256').update(t).digest('hex'); }
 
 /* ---------- Нууц үг (scrypt) ---------- */
 function hashPw(pw) {
@@ -168,6 +197,33 @@ app.post('/api/login', (req, res) => {
 });
 app.get('/api/me', auth, (req, res) => res.json(req.user));
 
+// Нууц үг мартсан — өөрөө имэйлээр сэргээх (нэвтрэх шаардлагагүй)
+app.post('/api/forgot-password', async (req, res) => {
+  const login = ((req.body && req.body.login) || '').trim().toLowerCase();
+  const u = login && DB.users.find(x => x.username.toLowerCase() === login || (x.email || '').toLowerCase() === login);
+  if (u && u.email) {
+    const token = makeToken();
+    u.resetTokenHash = hashToken(token); u.resetExpires = Date.now() + 3600 * 1000; persist();
+    const link = baseUrl(req) + '/?reset=' + token;
+    await sendMail(u.email, '⚡ Цахилгааны нэгж — Нууц үг сэргээх',
+      `<p>Сайн байна уу, ${u.name}!</p><p>Нууц үг сэргээх хүсэлт ирлээ. Доорх холбоосоор орж шинэ нууц үг тохируулна уу (1 цагийн дотор хүчинтэй):</p>
+       <p><a href="${link}">${link}</a></p><p>Хэрэв та энэ хүсэлтийг гаргаагүй бол энэ имэйлийг үл тоомсорлоно уу.</p>`);
+  }
+  // Хэрэглэгч байгаа эсэхийг илчлэхгүйн тулд үргэлж ижил хариу
+  res.json({ ok: true });
+});
+app.post('/api/reset-password', (req, res) => {
+  const { token, password } = req.body || {};
+  if (!token || !password || password.length < 6) return res.status(400).json({ error: 'Нууц үг доод тал нь 6 тэмдэгт байх ёстой' });
+  const th = hashToken(token);
+  const u = DB.users.find(x => x.resetTokenHash === th && x.resetExpires && x.resetExpires > Date.now());
+  if (!u) return res.status(400).json({ error: 'Холбоосны хугацаа дууссан эсвэл буруу байна. Дахин хүсэлт гаргана уу.' });
+  u.pw = hashPw(password);
+  delete u.resetTokenHash; delete u.resetExpires; delete u.mustSetPassword;
+  persist();
+  res.json({ ok: true });
+});
+
 // Дундын мэдээлэл
 app.get('/api/data', auth, (_req, res) => res.json(DB.app));
 app.put('/api/data', auth, (req, res) => {
@@ -186,13 +242,43 @@ app.post('/api/notify', auth, async (req, res) => {
 
 // Хэрэглэгчийн удирдлага (зөвхөн админ)
 app.get('/api/users', auth, adminOnly, (_req, res) => res.json(DB.users.map(publicUser)));
-app.post('/api/users', auth, adminOnly, (req, res) => {
+app.post('/api/users', auth, adminOnly, async (req, res) => {
   const { username, name, password, role, phone, email } = req.body || {};
-  if (!username || !name || !password) return res.status(400).json({ error: 'Нэр, нэвтрэх нэр, нууц үг шаардлагатай' });
+  if (!username || !name) return res.status(400).json({ error: 'Нэр, нэвтрэх нэр шаардлагатай' });
+  if (!password && !email) return res.status(400).json({ error: 'Нууц үг эсвэл имэйл хаягийн аль нэгийг оруулна уу' });
   if (DB.users.some(u => u.username === username)) return res.status(409).json({ error: 'Энэ нэвтрэх нэр бүртгэлтэй байна' });
-  const u = { id: ++DB.userSeq, username, name, role: role || 'EE', phone: phone || '', email: email || '', pw: hashPw(password) };
+  const u = { id: ++DB.userSeq, username, name, role: role || 'EE', phone: phone || '', email: email || '', pw: '' };
+  let setupToken = null;
+  if (password) {
+    u.pw = hashPw(password);
+  } else {
+    u.pw = hashPw(crypto.randomBytes(16).toString('hex')); // ашиглагдахгүй санамсаргүй нууц үг
+    setupToken = makeToken();
+    u.resetTokenHash = hashToken(setupToken);
+    u.resetExpires = Date.now() + 48 * 3600 * 1000;
+    u.mustSetPassword = true;
+  }
   DB.users.push(u); persist();
+  if (setupToken) {
+    const link = baseUrl(req) + '/?reset=' + setupToken;
+    await sendMail(email, '⚡ Цахилгааны нэгж — Бүртгэл идэвхжүүлэх',
+      `<p>Сайн байна уу, ${name}!</p><p>Танд "Цахилгааны нэгж" системд бүртгэл үүслээ (нэвтрэх нэр: <b>${username}</b>).</p>
+       <p>Доорх холбоосоор орж өөрийн нууц үгээ тохируулна уу (48 цагийн дотор хүчинтэй):</p>
+       <p><a href="${link}">${link}</a></p>`);
+  }
   res.status(201).json(publicUser(u));
+});
+app.post('/api/users/:id/send-reset', auth, adminOnly, async (req, res) => {
+  const u = DB.users.find(x => x.id === +req.params.id);
+  if (!u) return res.status(404).json({ error: 'Олдсонгүй' });
+  if (!u.email) return res.status(400).json({ error: 'Энэ хэрэглэгчид имэйл хаяг бүртгэлгүй байна' });
+  const token = makeToken();
+  u.resetTokenHash = hashToken(token); u.resetExpires = Date.now() + 3600 * 1000; persist();
+  const link = baseUrl(req) + '/?reset=' + token;
+  const r = await sendMail(u.email, '⚡ Цахилгааны нэгж — Нууц үг сэргээх',
+    `<p>Сайн байна уу, ${u.name}!</p><p>Нууц үг тохируулах хүсэлт ирлээ. Доорх холбоосоор орж шинэ нууц үг тохируулна уу (1 цагийн дотор хүчинтэй):</p>
+     <p><a href="${link}">${link}</a></p><p>Хэрэв та энэ хүсэлтийг гаргаагүй бол энэ имэйлийг үл тоомсорлоно уу.</p>`);
+  res.json(r);
 });
 app.put('/api/users/:id', auth, adminOnly, (req, res) => {
   const u = DB.users.find(x => x.id === +req.params.id);

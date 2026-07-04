@@ -144,7 +144,20 @@
     <div style="height:10px"></div>
     <label class="field"><span>Нууц үг</span><input id="lp" type="password" autocomplete="current-password"></label>
     <div style="height:16px"></div><button class="btn" style="width:100%">Нэвтрэх</button>
+    <div style="text-align:center;margin-top:12px"><a href="#" onclick="showForgot();return false" style="font-size:12px;color:var(--muted)">Нууц үг мартсан?</a></div>
     <div class="muted" style="font-size:11px;margin-top:14px;line-height:1.6">Хэрэглэгчээ админ үүсгэнэ. Анхны админ: <b>admin / admin123</b></div>
+  </form>
+</div>
+
+<div id="resetWrap" class="login-wrap hidden">
+  <form class="glass card" style="width:340px" onsubmit="doResetPassword(event)">
+    <div class="brand" style="border:0;padding:0 0 18px"><div class="logo">🔑</div>
+      <div><b>Шинэ нууц үг тохируулах</b><small>Цахилгааны нэгж</small></div></div>
+    <label class="field"><span>Шинэ нууц үг</span><input id="rp1" type="password" autocomplete="new-password" required minlength="6"></label>
+    <div style="height:10px"></div>
+    <label class="field"><span>Нууц үг давтах</span><input id="rp2" type="password" autocomplete="new-password" required minlength="6"></label>
+    <div style="height:16px"></div><button class="btn" style="width:100%">Хадгалах</button>
+    <div class="muted" style="font-size:11px;margin-top:14px" id="resetMsg"></div>
   </form>
 </div>
 
@@ -1549,14 +1562,14 @@ function viewUsers(){ensureStaff();return `<div class="glass card" style="margin
     <form onsubmit="addUser(event)"><div class="col3">
       <label class="field"><span>Нэвтрэх нэр *</span><input id="u_username" required placeholder="ж: bat"></label>
       <label class="field"><span>Овог нэр * <span class="muted" style="font-weight:400">(HR-аас сонго → албан тушаал авто)</span></span><input id="u_name" list="hrNames" required placeholder="Хүний нөөцийн нэртэй ЯГ АДИЛ" oninput="uNamePick(this.value)"></label>
-      <label class="field"><span>Нууц үг *</span><input id="u_pw" required value="123456" placeholder="нууц үг"></label>
+      <label class="field"><span>Нууц үг <span class="muted" style="font-weight:400">(хоосон = имэйлээр код илгээнэ)</span></span><input id="u_pw" placeholder="хоосон орхиж болно"></label>
       <label class="field"><span>Эрх / Албан тушаал <span id="u_match" class="muted" style="font-weight:400"></span></span><select id="u_role">${ROLES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('')}</select></label>
       <label class="field"><span>📱 Утас</span><input id="u_phone" placeholder="9911...."></label>
       <label class="field"><span>✉️ Имэйл</span><input id="u_email" type="email" placeholder="name@company.mn"></label>
       <div style="display:flex;align-items:end"><button class="btn" style="width:100%">Нэмэх</button></div></div></form>
     <div class="addbar" style="margin-top:10px"><button class="btn btn-sm" onclick="createUsersFromHR()">🧑‍🔧 Хүний нөөцийн бүх ажилтнаар бүртгэл үүсгэх (нууц үг 123456)</button>
       <span class="muted" style="font-size:12px">Албан тушаал тус бүрийн эрхээр автоматаар бүртгэл үүснэ.</span></div>
-    <div class="note" style="margin-top:12px">🔑 товчоор нууц үг солино (зөвхөн админ) · ⚙️ товчоор эрх солино · Шинэ бүртгэлийн анхны нууц үг: <b>123456</b>.</div></div>
+    <div class="note" style="margin-top:12px">🔑 товчоор нууц үг шууд солино (зөвхөн админ) · ✉️ товчоор нууц үг тохируулах холбоосыг имэйлээр илгээнэ · ⚙️ товчоор эрх солино.</div></div>
   <div class="glass card" style="padding:0;overflow:auto"><table id="userTable"><tbody><tr><td class="muted" style="padding:20px">Уншиж байна…</td></tr></tbody></table></div>`;}
 async function loadUsers(){try{const us=await api('/api/users',{headers:authHdr()});
   document.getElementById('userTable').innerHTML=`<thead><tr><th>Нэвтрэх нэр</th><th>Овог нэр</th><th>Эрх</th><th>Утас</th><th>Имэйл</th><th style="text-align:right">Үйлдэл</th></tr></thead>
@@ -1564,7 +1577,8 @@ async function loadUsers(){try{const us=await api('/api/users',{headers:authHdr(
       <td><span class="badge ${u.role==='ADMIN'?'b-danger':u.role==='VIEWER'?'b-muted':'b-accent'}">${roleLabel(u.role)}</span></td>
       <td class="muted" style="font-size:12px">${esc(u.phone)||'—'}</td><td class="muted" style="font-size:12px">${esc(u.email)||'—'}</td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="ic" title="Нууц үг солих" onclick="editUserPw(${u.id},'${esc(u.username)}')">🔑</button>
+        <button class="ic" title="Нууц үг шууд солих" onclick="editUserPw(${u.id},'${esc(u.username)}')">🔑</button>
+        <button class="ic" title="Нууц үг тохируулах холбоос имэйлээр илгээх" onclick="sendResetEmail(${u.id},'${esc(u.username)}')">✉️</button>
         <button class="ic" title="Утас/имэйл засах" onclick="editUserContact(${u.id},'${esc(u.username)}','${esc(u.phone||'')}','${esc(u.email||'')}')">📱</button>
         <button class="ic" title="Эрх солих" onclick="editUserRole(${u.id},'${esc(u.username)}','${u.role}')">⚙️</button>
         ${u.id===ME.id?'<span class="muted" style="font-size:12px;margin-left:4px">(та)</span>':`<button class="del" title="Устгах" onclick="delUser(${u.id},'${esc(u.username)}')">✕</button>`}
@@ -1589,14 +1603,21 @@ function uNamePick(v){const nm=(v||'').trim();const un=document.getElementById('
     const hint=document.getElementById('u_match');if(hint)hint.innerHTML='✔ HR-тэй таарлаа · '+roleLabel(st.role)+' · Ээлж '+st.shift;}
   else{const hint=document.getElementById('u_match');if(hint)hint.innerHTML=nm?'⚠ HR-д ийм нэртэй ажилтан алга — нэрийг яг адил бичнэ үү':'';}}
 async function addUser(e){e.preventDefault();
-  try{await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify({
-      username:val('u_username').trim(),name:val('u_name').trim(),password:val('u_pw'),role:val('u_role'),phone:val('u_phone').trim(),email:val('u_email').trim()})});
+  const pw=val('u_pw').trim();const email=val('u_email').trim();
+  if(!pw&&!email){toast('Нууц үг эсвэл имэйл хаягийн аль нэгийг оруулна уу');return;}
+  try{const body={username:val('u_username').trim(),name:val('u_name').trim(),role:val('u_role'),phone:val('u_phone').trim(),email};
+    if(pw)body.password=pw;
+    await api('/api/users',{method:'POST',headers:jsonHdr(),body:JSON.stringify(body)});
     audit('Хэрэглэгч нэмэв',val('u_username').trim()+' ('+roleLabel(val('u_role'))+')');save();
-    toast('Хэрэглэгч нэмэгдлээ ✓');render();}catch(err){toast(err.message);}}
+    toast(pw?'Хэрэглэгч нэмэгдлээ ✓':'Хэрэглэгч нэмэгдлээ ✓ · Тохиргооны холбоос имэйлээр илгээлээ');render();}catch(err){toast(err.message);}}
 async function editUserPw(id,name){const pw=prompt('"'+name+'" хэрэглэгчийн ШИНЭ нууц үг оруулна уу:');
   if(!pw||!pw.trim())return;
   try{await api('/api/users/'+id,{method:'PUT',headers:jsonHdr(),body:JSON.stringify({password:pw.trim()})});toast('Нууц үг солигдлоо ✓');}
   catch(err){toast(err.message);}}
+async function sendResetEmail(id,name){
+  if(!confirm('"'+name+'" -д нууц үг тохируулах холбоос имэйлээр илгээх үү?'))return;
+  try{const r=await api('/api/users/'+id+'/send-reset',{method:'POST',headers:authHdr()});
+    toast(r.ok?'Имэйл илгээгдлээ ✓':(r.error||'Имэйл илгээхэд алдаа гарлаа'));}catch(err){toast(err.message);}}
 async function editUserContact(id,name,curPhone,curEmail){
   const phone=prompt('"'+name+'" — Утасны дугаар:',curPhone||'');if(phone===null)return;
   const email=prompt('"'+name+'" — Имэйл хаяг:',curEmail||'');if(email===null)return;
@@ -2341,6 +2362,22 @@ async function doLogin(e){e.preventDefault();
     const d=await r.json();if(!r.ok){toast(d.error||'Алдаа');return;}
     TOKEN=d.token;ME=d.user;localStorage.setItem('tk',TOKEN);await apiLoad();audit('Нэвтэрсэн','');save();startApp();
   }catch(err){toast('Холболтын алдаа — сервер ажиллаж байгаа эсэхийг шалгана уу');}}
+async function showForgot(){
+  const login=prompt('Нэвтрэх нэр эсвэл имэйл хаягаа оруулна уу:');
+  if(!login||!login.trim())return;
+  try{await fetch('/api/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login:login.trim()})});}catch(e){}
+  toast('Хэрэв бүртгэлтэй бол таны имэйл рүү холбоос илгээгдлээ ✓');}
+async function doResetPassword(e){e.preventDefault();
+  const p1=val('rp1'),p2=val('rp2');
+  if(p1.length<6){document.getElementById('resetMsg').textContent='Нууц үг доод тал нь 6 тэмдэгт байх ёстой';return;}
+  if(p1!==p2){document.getElementById('resetMsg').textContent='Нууц үг таарахгүй байна';return;}
+  try{const r=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:window._resetToken,password:p1})});
+    const d=await r.json();
+    if(!r.ok){document.getElementById('resetMsg').textContent=d.error||'Алдаа гарлаа';return;}
+    try{history.replaceState({},'',location.pathname);}catch(e){}
+    document.getElementById('resetWrap').classList.add('hidden');document.getElementById('login').classList.remove('hidden');
+    toast('Нууц үг амжилттай тохируулагдлаа ✓ Нэвтэрнэ үү');
+  }catch(err){document.getElementById('resetMsg').textContent='Холболтын алдаа — сервер ажиллаж байгаа эсэхийг шалгана уу';}}
 function logout(){localStorage.removeItem('tk');TOKEN=null;ME=null;location.reload();}
 function startApp(){document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
@@ -2357,6 +2394,8 @@ async function init(){if(!TOKEN)return;
   try{ME=await api('/api/me',{headers:authHdr()});await apiLoad();startApp();}
   catch{localStorage.removeItem('tk');TOKEN=null;}}
 try{applyTheme();}catch(e){}
+try{const rsp=new URLSearchParams(location.search);const rt=rsp.get('reset');
+  if(rt){window._resetToken=rt;document.getElementById('login').classList.add('hidden');document.getElementById('resetWrap').classList.remove('hidden');}}catch(e){}
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();if(ME)openSearch();}if(e.key==='Escape'){closeSearch();const c=document.getElementById('rCtx');if(c)c.remove();}
   if(CUR==='roster'&&(e.ctrlKey||e.metaKey)){if(e.key==='z'||e.key==='Z'){e.preventDefault();rUndo();}if(e.key==='y'||e.key==='Y'){e.preventDefault();rRedo();}}});
 document.addEventListener('mouseup',()=>{if(window._rDrag)rPaintEnd();});
