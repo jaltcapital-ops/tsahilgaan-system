@@ -226,6 +226,10 @@ app.post('/api/reset-password', (req, res) => {
 
 // Дундын мэдээлэл
 app.get('/api/data', auth, (_req, res) => res.json(DB.app));
+// TEMP: бүх өгөгдлийг (users+app) шинэ серверт шилжүүлэхэд ашиглах түр экспорт (дараа устгана)
+app.get('/api/admin/raw-export', auth, adminOnly, (_req, res) => {
+  res.type('application/json').send(fs.readFileSync(DATA_FILE));
+});
 app.put('/api/data', auth, (req, res) => {
   if (req.user.role === 'VIEWER') return res.status(403).json({ error: 'Үзэгч засах эрхгүй' });
   // "naryad" (Work Order) өгөгдлийг доорх тусдаа /api/naryad эндпойнтууд удирдана.
