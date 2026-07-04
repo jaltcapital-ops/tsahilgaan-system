@@ -20,6 +20,10 @@ const SECRET = process.env.SECRET || 'tsahilgaan-secret-CHANGE-ME';
 const PORT = process.env.PORT || 4000;
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '');
 
+/* ---------- Файл хадгалах үйлчилгээ (дотоод сервер дээрх, сонголтоор) ---------- */
+const FILE_API_URL = (process.env.FILE_API_URL || '').replace(/\/$/, '');
+const FILE_API_KEY = process.env.FILE_API_KEY || '';
+
 /* ---------- Имэйл (SMTP, сонголтоор) ---------- */
 const SMTP_HOST = process.env.SMTP_HOST || '';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
@@ -179,7 +183,8 @@ app.use(express.json({ limit: '25mb' }));
 
 function auth(req, res, next) {
   const h = req.headers.authorization || '';
-  const u = verify(h.startsWith('Bearer ') ? h.slice(7) : null);
+  const tok = h.startsWith('Bearer ') ? h.slice(7) : (req.query.token || null);
+  const u = verify(tok);
   if (!u) return res.status(401).json({ error: 'Нэвтрэх шаардлагатай' });
   req.user = u; next();
 }
@@ -264,6 +269,39 @@ app.delete('/api/naryad/:id', auth, (req, res) => {
   DB.app.naryad = (DB.app.naryad || []).filter(x => x.id !== +req.params.id);
   persist();
   res.json({ ok: true });
+});
+
+// Файл хадгалах (зураг/баримт бичиг) — дотоод серверт дамжуулна
+app.post('/api/upload', auth, async (req, res) => {
+  if (!FILE_API_URL || !FILE_API_KEY) return res.status(503).json({ error: 'Файл хадгалах үйлчилгээ тохируулагдаагүй байна' });
+  const { name, type, dataUrl } = req.body || {};
+  if (!dataUrl) return res.status(400).json({ error: 'dataUrl шаардлагатай' });
+  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+  if (!m) return res.status(400).json({ error: 'dataUrl формат буруу' });
+  try {
+    const r = await fetch(FILE_API_URL + '/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': FILE_API_KEY },
+      body: JSON.stringify({ name: name || 'file', type: type || m[1], dataBase64: m[2] })
+    });
+    const j = await r.json();
+    if (!r.ok) return res.status(r.status).json(j);
+    res.status(201).json({ id: j.id, url: '/api/files/' + j.id });
+  } catch (e) {
+    res.status(502).json({ error: 'Файл серверт холбогдож чадсангүй: ' + String(e && e.message || e) });
+  }
+});
+app.get('/api/files/:id', auth, async (req, res) => {
+  if (!FILE_API_URL || !FILE_API_KEY) return res.status(503).json({ error: 'Файл хадгалах үйлчилгээ тохируулагдаагүй байна' });
+  try {
+    const r = await fetch(FILE_API_URL + '/file/' + encodeURIComponent(req.params.id), { headers: { 'x-api-key': FILE_API_KEY } });
+    if (!r.ok) return res.status(r.status).end();
+    res.setHeader('Content-Type', r.headers.get('content-type') || 'application/octet-stream');
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.send(buf);
+  } catch (e) {
+    res.status(502).json({ error: 'Файл серверт холбогдож чадсангүй' });
+  }
 });
 
 // Telegram мэдэгдэл — чухал гэмтэл, хугацаа хэтэрсэн ажил

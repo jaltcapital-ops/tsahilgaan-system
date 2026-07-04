@@ -196,6 +196,14 @@ const jsonHdr=()=>({...authHdr(),'Content-Type':'application/json'});
 async function api(path,opts={}){const r=await fetch(path,opts);if(r.status===401){logout();throw new Error('auth');}
   const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Алдаа');return d;}
 async function apiLoad(){DB=await api('/api/data',{headers:authHdr()});}
+// Зураг/файлыг дотоод файл-серверт байршуулж, жижиг лавлагаа {id,url,name,type} буцаана.
+// Амжилтгүй бол (сүлжээгүй үед ч алдагдахгүйн тулд) base64-ийг шууд хадгална (fallback).
+function uploadFile(dataUrl,name,type,cb){
+  api('/api/upload',{method:'POST',headers:jsonHdr(),body:JSON.stringify({name,type,dataUrl})})
+    .then(r=>cb({id:r.id,url:r.url+'?token='+encodeURIComponent(TOKEN),name,type}))
+    .catch(()=>cb({data:dataUrl,name,type}));
+}
+function photoSrc(d){return (typeof d==='string')?d:(d.url||d.data||'');}
 let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
   fetch('/api/data',{method:'PUT',headers:jsonHdr(),body:JSON.stringify(DB)})
@@ -1102,7 +1110,7 @@ function viewFaults(){const rows=DB.wos.filter(w=>w.fault&&isActiveFault(w)).sor
       <td style="max-width:240px">${esc(w.desc)}</td><td>${photoThumbs(w.photos)}</td><td><span class="badge ${w.prio==='Эгзэгтэй'?'b-danger':w.prio==='Өндөр'?'b-warn':'b-accent'}">${esc(w.prio)}</span></td>
       <td class="muted">${esc(w.root)||'—'}</td><td>${w.start?'<span class="t-warn">'+fmtDur((Date.now()-new Date(w.start))/60000)+'</span> <span class="muted" style="font-size:10px">(үргэлжилж буй)</span>':'—'}</td>
       <td>${woStatusCell(w)}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:32px" class="muted">Гэмтэл алга.</td></tr>'}</tbody></table></div>`;}
-function photoThumbs(ph){if(!ph||!ph.length)return '<span class="muted">—</span>';return ph.map(d=>'<img src="'+d+'" style="height:32px;border-radius:4px;cursor:zoom-in;margin:1px" onclick="showImgFromEl(this)">').join('');}
+function photoThumbs(ph){if(!ph||!ph.length)return '<span class="muted">—</span>';return ph.map(d=>'<img src="'+photoSrc(d)+'" style="height:32px;border-radius:4px;cursor:zoom-in;margin:1px" onclick="showImgFromEl(this)">').join('');}
 function exportFaults(){const rows=[['WO','Tag','Тайлбар','Priority','Root Cause','Action Taken','Downtime(мин)','Downtime(хоног/цаг)','Эхэлсэн','Дууссан','Статус','Огноо']];
   DB.wos.filter(w=>w.fault&&inRange(w.date)).sort((a,b)=>a.date<b.date?1:-1).forEach(w=>rows.push([w.no,w.equip,w.desc,w.prio,w.root,w.action,downtimeOf(w),fmtDur(downtimeOf(w)),(w.start||'').replace('T',' '),(w.finish||'').replace('T',' '),w.status,w.date]));
   downloadCSV('Gemtel_'+RANGE.from+'_'+RANGE.to,rows);}
@@ -1389,9 +1397,10 @@ function compressImg(file,cb){const r=new FileReader();r.onload=ev=>{const img=n
     if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
     const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL('image/jpeg',0.55));};img.src=ev.target.result;};r.readAsDataURL(file);}
 function handlePhotos(input){const files=Array.from(input.files||[]);if(!window._newPhotos)window._newPhotos=[];
-  files.forEach(f=>compressImg(f,d=>{if(window._newPhotos.length<6){window._newPhotos.push(d);renderPhotoPrev();}}));input.value='';}
+  files.forEach(f=>compressImg(f,d=>{if(window._newPhotos.length<6){const idx=window._newPhotos.length;window._newPhotos.push(d);renderPhotoPrev();
+    uploadFile(d,f.name||'photo.jpg','image/jpeg',ref=>{window._newPhotos[idx]=ref;});}}));input.value='';}
 function renderPhotoPrev(){const el=document.getElementById('photoPrev');if(!el)return;
-  el.innerHTML=(window._newPhotos||[]).map((d,i)=>'<div style="position:relative;display:inline-block;margin:4px"><img src="'+d+'" style="height:70px;border-radius:6px;cursor:zoom-in" onclick="showImgFromEl(this)"><button type="button" class="del" style="position:absolute;top:-6px;right:-6px;background:#000;border-radius:50%;font-size:13px" onclick="window._newPhotos.splice('+i+',1);renderPhotoPrev()">✕</button></div>').join('');}
+  el.innerHTML=(window._newPhotos||[]).map((d,i)=>'<div style="position:relative;display:inline-block;margin:4px"><img src="'+photoSrc(d)+'" style="height:70px;border-radius:6px;cursor:zoom-in" onclick="showImgFromEl(this)"><button type="button" class="del" style="position:absolute;top:-6px;right:-6px;background:#000;border-radius:50%;font-size:13px" onclick="window._newPhotos.splice('+i+',1);renderPhotoPrev()">✕</button></div>').join('');}
 function showImgFromEl(el){const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;display:grid;place-items:center;cursor:zoom-out';o.onclick=function(){o.remove();};const im=document.createElement('img');im.src=el.src;im.style.cssText='max-width:94vw;max-height:94vh;border-radius:8px';o.appendChild(im);document.body.appendChild(o);}
 function viewPassport(){const tag=window._eqTag;const e=DB.equip.find(x=>x.tag===tag)||{tag:tag,name:'(бүртгэлгүй)'};
   const works=DB.wos.filter(w=>w.equip===tag).sort((a,b)=>a.date<b.date?1:-1);
@@ -1973,9 +1982,12 @@ function woComplete(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){t
     <div class="note" style="margin-top:8px;font-size:12px">Дуусгасны дараа <b>Мастер/Ахлах баталгаажуулна</b>. Татгалзвал буцаад "Хийгдэж буй" болно.</div></div>`;
   document.body.appendChild(o);}
 function handleWoFiles(input){const files=Array.from(input.files||[]);if(!window._woFiles)window._woFiles=[];
-  files.forEach(f=>{if(f.size>3*1024*1024){toast(f.name+' хэт том (>3MB)');return;}const r=new FileReader();r.onload=e=>{window._woFiles.push({name:f.name,type:f.type,data:e.target.result});renderWoFiles();};r.readAsDataURL(f);});input.value='';}
+  files.forEach(f=>{if(f.size>3*1024*1024){toast(f.name+' хэт том (>3MB)');return;}const r=new FileReader();r.onload=e=>{
+    const idx=window._woFiles.length;window._woFiles.push({name:f.name,type:f.type,data:e.target.result});renderWoFiles();
+    uploadFile(e.target.result,f.name,f.type,ref=>{window._woFiles[idx]={name:f.name,type:f.type,url:ref.url,id:ref.id,data:ref.data};});
+  };r.readAsDataURL(f);});input.value='';}
 function renderWoFiles(){const el=document.getElementById('woFileList');if(!el)return;el.innerHTML=(window._woFiles||[]).map((f,i)=>`<span class="badge b-muted" style="margin:2px">📎 ${esc(f.name)} <a onclick="window._woFiles.splice(${i},1);renderWoFiles()" style="cursor:pointer;color:#ff4d4f">✕</a></span>`).join('');}
-function woFileLink(f){return `<a href="${f.data}" download="${esc(f.name)}" class="badge b-accent" style="margin:2px;text-decoration:none">📎 ${esc(f.name)}</a>`;}
+function woFileLink(f){return `<a href="${f.url||f.data}" download="${esc(f.name)}" class="badge b-accent" style="margin:2px;text-decoration:none">📎 ${esc(f.name)}</a>`;}
 function showWoQR(id){const w=woFind(id);if(!w)return;if(typeof qrcode==='undefined'){toast('QR сан алга');return;}
   const url=location.origin+'/?wo='+id;const img=qrDataUrl(url,5);
   const o=document.createElement('div');o.id='woQrModal';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;display:grid;place-items:center;padding:16px';o.onclick=function(e){if(e.target===o)o.remove();};
