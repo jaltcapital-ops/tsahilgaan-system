@@ -228,7 +228,41 @@ app.post('/api/reset-password', (req, res) => {
 app.get('/api/data', auth, (_req, res) => res.json(DB.app));
 app.put('/api/data', auth, (req, res) => {
   if (req.user.role === 'VIEWER') return res.status(403).json({ error: 'Үзэгч засах эрхгүй' });
-  DB.app = req.body; persistDebounced();
+  // "naryad" (Work Order) өгөгдлийг доорх тусдаа /api/naryad эндпойнтууд удирдана.
+  // Олон хэрэглэгч зэрэг ажиллахад энэ бүхэл blob PUT нь бусдын наряд өөрчлөлтийг дарж устгахаас сэргийлэхийн тулд
+  // naryad болон түүний sequence-ийг энд хэвээр нь (серверт байгаагаар нь) хадгална.
+  const incoming = req.body || {};
+  const curSeq = (DB.app && DB.app.seq) || {};
+  const incSeq = incoming.seq || {};
+  DB.app = { ...incoming, naryad: (DB.app && DB.app.naryad) || [], seq: { ...incSeq, naryad: curSeq.naryad || 0 } };
+  persistDebounced();
+  res.json({ ok: true });
+});
+
+// Наряд (Work Order) — тусдаа атомик CRUD, олон хэрэглэгч зэрэг ажиллахад өгөгдөл дарагдахаас сэргийлнэ
+app.post('/api/naryad', auth, (req, res) => {
+  if (req.user.role === 'VIEWER') return res.status(403).json({ error: 'Үзэгч засах эрхгүй' });
+  if (!DB.app.naryad) DB.app.naryad = [];
+  if (!DB.app.seq) DB.app.seq = {};
+  if (!DB.app.seq.naryad) DB.app.seq.naryad = 0;
+  const w = { ...(req.body || {}), id: ++DB.app.seq.naryad };
+  DB.app.naryad.push(w);
+  persist();
+  res.status(201).json(w);
+});
+app.patch('/api/naryad/:id', auth, (req, res) => {
+  if (req.user.role === 'VIEWER') return res.status(403).json({ error: 'Үзэгч засах эрхгүй' });
+  const list = DB.app.naryad || [];
+  const w = list.find(x => x.id === +req.params.id);
+  if (!w) return res.status(404).json({ error: 'Наряд олдсонгүй' });
+  Object.assign(w, req.body || {}, { id: w.id });
+  persist();
+  res.json(w);
+});
+app.delete('/api/naryad/:id', auth, (req, res) => {
+  if (req.user.role === 'VIEWER') return res.status(403).json({ error: 'Үзэгч засах эрхгүй' });
+  DB.app.naryad = (DB.app.naryad || []).filter(x => x.id !== +req.params.id);
+  persist();
   res.json({ ok: true });
 });
 
