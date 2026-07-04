@@ -196,12 +196,30 @@ const jsonHdr=()=>({...authHdr(),'Content-Type':'application/json'});
 async function api(path,opts={}){const r=await fetch(path,opts);if(r.status===401){logout();throw new Error('auth');}
   const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Алдаа');return d;}
 async function apiLoad(){DB=await api('/api/data',{headers:authHdr()});}
-// Зураг/файлыг дотоод файл-серверт байршуулж, жижиг лавлагаа {id,url,name,type} буцаана.
+// Зураг/файлын жагсаалтыг (Хадгалах дарахаас ЯГ ӨМНӨ, await-аар) дотоод файл-серверт байршуулж,
+// жижиг лавлагаа {id,url,name,type} болгож хувиргана. Сонгосон мөчид биш, ЗӨВХӨН хадгалах мөчид upload хийснээр
+// "хурдан дарчихвал upload дуусаагүй атлаа хадгалагдчихна" гэсэн race condition-ыг бүрэн арилгана.
 // Амжилтгүй бол (сүлжээгүй үед ч алдагдахгүйн тулд) base64-ийг шууд хадгална (fallback).
-function uploadFile(dataUrl,name,type,cb){
-  api('/api/upload',{method:'POST',headers:jsonHdr(),body:JSON.stringify({name,type,dataUrl})})
-    .then(r=>cb({id:r.id,url:r.url+'?token='+encodeURIComponent(TOKEN),name,type}))
-    .catch(()=>cb({data:dataUrl,name,type}));
+async function uploadPending(list){
+  const out=[];
+  for(const item of (list||[])){
+    if(typeof item==='string'){
+      try{
+        const r=await api('/api/upload',{method:'POST',headers:jsonHdr(),body:JSON.stringify({name:'photo.jpg',type:'image/jpeg',dataUrl:item})});
+        out.push({id:r.id,url:r.url+'?token='+encodeURIComponent(TOKEN)});
+      }catch(e){out.push(item);}
+      continue;
+    }
+    if(item&&item.data&&!item.url){
+      try{
+        const r=await api('/api/upload',{method:'POST',headers:jsonHdr(),body:JSON.stringify({name:item.name||'file',type:item.type||'application/octet-stream',dataUrl:item.data})});
+        out.push({name:item.name,type:item.type,id:r.id,url:r.url+'?token='+encodeURIComponent(TOKEN)});
+      }catch(e){out.push(item);}
+      continue;
+    }
+    out.push(item);
+  }
+  return out;
 }
 function photoSrc(d){return (typeof d==='string')?d:(d.url||d.data||'');}
 let saveT=null;
@@ -667,7 +685,7 @@ function viewNew(){window._newPhotos=[];return `${dataListEquip()}${dataListPd()
 function prioPick(btn){document.querySelectorAll('#prioSeg .prio-btn').forEach(b=>{b.classList.remove('on');b.style.background='transparent';b.style.color='var(--muted)';b.style.borderColor='var(--line)';});
   const c=btn.getAttribute('data-c');btn.classList.add('on');btn.style.background=c;btn.style.color='#fff';btn.style.borderColor=c;
   document.getElementById('w_prio').value=btn.getAttribute('data-p');}
-function saveFault(e){e.preventDefault();
+async function saveFault(e){e.preventDefault();
   const equip=val('w_equip').trim(),pd=val('w_pd').trim(),desc=val('w_desc').trim();
   if(!desc){toast('Гэмтлийн тайлбар оруулна уу');return;}
   if(!equip&&!pd){toast('Тоног эсвэл PD дугаар оруулна уу');return;}
@@ -675,9 +693,10 @@ function saveFault(e){e.preventDefault();
   const startEl=document.getElementById('w_start');const start=(startEl&&startEl.value)||new Date().toISOString().slice(0,16);
   const area=(document.getElementById('w_area')||{}).value||'';const root=(document.getElementById('w_root')||{}).value||'';
   if(!DB.wos)DB.wos=[];if(!DB.seq.wo)DB.seq.wo=0;
+  const photos=await uploadPending(window._newPhotos||[]);
   const w={id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:null,date:iso(new Date()),
     equip:equip||pd,pd:pd||((DB.equip.find(x=>x.tag===equip)||{}).pd||''),area,type:'Шуурхай дуудлага',prio,status:'Нээлттэй',
-    desc,fault:true,fstate:'Эвдрэлтэй',root,action:'',start,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()};
+    desc,fault:true,fstate:'Эвдрэлтэй',root,action:'',start,finish:'',down:null,eng:ME?ME.name:'',photos};
   DB.wos.push(w);window._newPhotos=[];audit('Гэмтэл бүртгэв',(equip||pd||'')+' · '+desc);
   notify('⚡ ГЭМТЭЛ ('+prio+')\nТоног: '+(equip||pd||'—')+'\nТайлбар: '+desc+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
   pushNotif('*','⚡ Гэмтэл: '+(equip||pd||'')+' — '+desc);notifyBrowser('⚡ Гэмтэл бүртгэгдлээ',(equip||pd||'')+' '+desc);
@@ -692,15 +711,16 @@ function calcDown(){const s=val('w_start'),f=val('w_finish');const isF=document.
   if(isF&&!f){txt='Засварласан үед хугацаа авто тооцоологдоно';}
   else if(s&&f){let m=Math.max(0,Math.round((new Date(f)-new Date(s))/60000));txt=fmtDur(m);}document.getElementById('downPrev').textContent=txt;}
 function val(id){return document.getElementById(id).value;}
-function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
+async function saveReport(e){e.preventDefault();const rid=++DB.seq.report;
   const no='DR-'+val('f_date').replaceAll('-','')+'-'+val('f_shift')+'-'+(val('f_dn')==='Өдөр'?'D':'N');
   DB.reports.push({id:rid,no,date:val('f_date'),shift:val('f_shift'),dn:val('f_dn'),head:+val('f_head'),lines:+val('f_lines'),notes:''});
   if(val('w_desc').trim()){const s=val('w_start'),f=val('w_finish');const isFault=document.getElementById('w_fault').checked;
     const prio=val('w_prio'),equip=val('w_equip'),desc=val('w_desc');
+    const photos=await uploadPending(window._newPhotos||[]);
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:rid,date:val('f_date'),
       equip,pd:val('w_pd'),area:val('w_area'),type:val('w_type'),prio,status:val('w_status'),
       desc,fault:isFault,fstate:isFault?'Эвдрэлтэй':'',root:val('w_root'),action:val('w_action'),
-      start:(s||(isFault?new Date().toISOString().slice(0,16):'')),finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng'),photos:(window._newPhotos||[]).slice()});
+      start:(s||(isFault?new Date().toISOString().slice(0,16):'')),finish:f,down:(s&&f)?Math.max(0,Math.round((new Date(f)-new Date(s))/60000)):null,eng:val('w_eng'),photos});
     if(isFault){
       notify('⚡ ГЭМТЭЛ бүртгэгдлээ ('+(prio||'—')+')\nТоног: '+(equip||'—')+'\nТайлбар: '+desc+'\nОгноо: '+val('f_date')+' ('+val('f_shift')+' ээлж) · '+(ME?ME.name:''));pushNotif('*','⚡ Гэмтэл: '+(equip||'—')+' — '+desc);notifyBrowser('⚡ Гэмтэл бүртгэгдлээ',(equip||'')+' '+desc);}
   }
@@ -1332,14 +1352,15 @@ async function saveTplCheck(e,target,tplId){e.preventDefault();const tpl=INS_TEM
     return {item:it.q,status:bad?'Анхаарах':'OK',note,fault:!!(bad&&it.isFaultFlag)};});
   const note=val('tp_note');const hasFault=results.some(r=>r.fault);const overall=results.some(r=>r.status==='Анхаарах')?'Анхаарах':'OK';
   if(!DB.inspections)DB.inspections=[];if(!DB.seq.inspection)DB.seq.inspection=0;if(!DB.seq.wo)DB.seq.wo=0;
-  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',results,overall,note,template:tplId,photos:(window._newPhotos||[]).slice()});
+  const photos=await uploadPending(window._newPhotos||[]);
+  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',results,overall,note,template:tplId,photos});
   const insWo=completeInsWO(target);audit('QR үзлэг ('+tplId+')',target+' · '+overall);
   const eqp=(DB.equip||[]).find(x=>x.tag===target)||{};
   if(hasFault){const now=new Date().toISOString().slice(0,16);
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:null,date:iso(new Date()),
       equip:target,pd:eqp.pd||'',area:eqp.area||'',type:'Шуурхай дуудлага',prio:'Өндөр',status:'Нээлттэй',
       desc:note||(target+' дээр доголдол илэрсэн ('+tpl.name+')'),fault:true,fstate:'Эвдрэлтэй',
-      root:results.filter(r=>r.status==='Анхаарах').map(r=>r.item+(r.note&&r.note!=='OK'?'('+r.note+')':'')).join(', '),action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()});
+      root:results.filter(r=>r.status==='Анхаарах').map(r=>r.item+(r.note&&r.note!=='OK'?'('+r.note+')':'')).join(', '),action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos});
     window._newPhotos=[];await saveNow();
     notify('⚡ ДОГОЛДОЛ илэрлээ ('+tpl.name+')\nТоног: '+target+'\nАсуудал: '+results.filter(r=>r.status==='Анхаарах').map(r=>r.item).join(', ')+'\n'+(note?'Тайлбар: '+note+'\n':'')+(ME?ME.name:''));
     pushNotif('*','⚡ Доголдол: '+target);notifyBrowser('⚡ Доголдол илэрлээ',target);
@@ -1377,7 +1398,8 @@ async function saveQuickCheck(e,target,kind){e.preventDefault();
     results.push({item:'Дуу чимээ',status:noise==='Хэвийн'?'OK':'Анхаарах',note:noise});}
   if(!DB.inspections)DB.inspections=[];if(!DB.seq.inspection)DB.seq.inspection=0;if(!DB.seq.wo)DB.seq.wo=0;
   const overall=(normal==='❌'||fault==='Тийм'||results.some(r=>r.status==='Анхаарах'))?'Анхаарах':'OK';
-  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',results,overall,note,photos:(window._newPhotos||[]).slice()});
+  const photos=await uploadPending(window._newPhotos||[]);
+  DB.inspections.push({id:++DB.seq.inspection,date:iso(new Date()),equip:target,by:ME?ME.name:'',results,overall,note,photos});
   const insWo=completeInsWO(target);   // нээлттэй үзлэгийн наряд байвал Completed
   audit('QR үзлэг хийв',target+' · '+overall);
   if(fault==='Тийм'){const now=new Date().toISOString().slice(0,16);
@@ -1385,7 +1407,7 @@ async function saveQuickCheck(e,target,kind){e.preventDefault();
     DB.wos.push({id:++DB.seq.wo,no:'WO'+Date.now().toString().slice(-9),reportId:null,date:iso(new Date()),
       equip:eqp||target,pd:pdv,area:'',type:'Шуурхай дуудлага',prio:'Өндөр',status:'Нээлттэй',
       desc:fdesc||note||((kind==='pd'?'PD ':'')+target+' дээр гэмтэл илэрсэн'),fault:true,fstate:'Эвдрэлтэй',
-      root:'',action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos:(window._newPhotos||[]).slice()});
+      root:'',action:'',start:now,finish:'',down:null,eng:ME?ME.name:'',photos});
     window._newPhotos=[];await saveNow();
     notify('⚡ ГЭМТЭЛ илэрлээ (QR үзлэг)\n'+(kind==='pd'?'PD: ':'Тоног: ')+target+'\nТайлбар: '+(fdesc||note||'—')+'\nОгноо: '+iso(new Date())+' · '+(ME?ME.name:''));
     pushNotif('*','⚡ Гэмтэл илэрлээ: '+(kind==='pd'?'PD ':'')+target);notifyBrowser('⚡ Гэмтэл илэрлээ',target);
@@ -1397,8 +1419,7 @@ function compressImg(file,cb){const r=new FileReader();r.onload=ev=>{const img=n
     if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
     const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL('image/jpeg',0.55));};img.src=ev.target.result;};r.readAsDataURL(file);}
 function handlePhotos(input){const files=Array.from(input.files||[]);if(!window._newPhotos)window._newPhotos=[];
-  files.forEach(f=>compressImg(f,d=>{if(window._newPhotos.length<6){const idx=window._newPhotos.length;window._newPhotos.push(d);renderPhotoPrev();
-    uploadFile(d,f.name||'photo.jpg','image/jpeg',ref=>{window._newPhotos[idx]=ref;});}}));input.value='';}
+  files.forEach(f=>compressImg(f,d=>{if(window._newPhotos.length<6){window._newPhotos.push(d);renderPhotoPrev();}}));input.value='';}
 function renderPhotoPrev(){const el=document.getElementById('photoPrev');if(!el)return;
   el.innerHTML=(window._newPhotos||[]).map((d,i)=>'<div style="position:relative;display:inline-block;margin:4px"><img src="'+photoSrc(d)+'" style="height:70px;border-radius:6px;cursor:zoom-in" onclick="showImgFromEl(this)"><button type="button" class="del" style="position:absolute;top:-6px;right:-6px;background:#000;border-radius:50%;font-size:13px" onclick="window._newPhotos.splice('+i+',1);renderPhotoPrev()">✕</button></div>').join('');}
 function showImgFromEl(el){const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;display:grid;place-items:center;cursor:zoom-out';o.onclick=function(){o.remove();};const im=document.createElement('img');im.src=el.src;im.style.cssText='max-width:94vw;max-height:94vh;border-radius:8px';o.appendChild(im);document.body.appendChild(o);}
@@ -1982,10 +2003,7 @@ function woComplete(id){const w=woFind(id);if(!w)return;if(!canOperateThis(w)){t
     <div class="note" style="margin-top:8px;font-size:12px">Дуусгасны дараа <b>Мастер/Ахлах баталгаажуулна</b>. Татгалзвал буцаад "Хийгдэж буй" болно.</div></div>`;
   document.body.appendChild(o);}
 function handleWoFiles(input){const files=Array.from(input.files||[]);if(!window._woFiles)window._woFiles=[];
-  files.forEach(f=>{if(f.size>3*1024*1024){toast(f.name+' хэт том (>3MB)');return;}const r=new FileReader();r.onload=e=>{
-    const idx=window._woFiles.length;window._woFiles.push({name:f.name,type:f.type,data:e.target.result});renderWoFiles();
-    uploadFile(e.target.result,f.name,f.type,ref=>{window._woFiles[idx]={name:f.name,type:f.type,url:ref.url,id:ref.id,data:ref.data};});
-  };r.readAsDataURL(f);});input.value='';}
+  files.forEach(f=>{if(f.size>3*1024*1024){toast(f.name+' хэт том (>3MB)');return;}const r=new FileReader();r.onload=e=>{window._woFiles.push({name:f.name,type:f.type,data:e.target.result});renderWoFiles();};r.readAsDataURL(f);});input.value='';}
 function renderWoFiles(){const el=document.getElementById('woFileList');if(!el)return;el.innerHTML=(window._woFiles||[]).map((f,i)=>`<span class="badge b-muted" style="margin:2px">📎 ${esc(f.name)} <a onclick="window._woFiles.splice(${i},1);renderWoFiles()" style="cursor:pointer;color:#ff4d4f">✕</a></span>`).join('');}
 function woFileLink(f){return `<a href="${f.url||f.data}" download="${esc(f.name)}" class="badge b-accent" style="margin:2px;text-decoration:none">📎 ${esc(f.name)}</a>`;}
 function showWoQR(id){const w=woFind(id);if(!w)return;if(typeof qrcode==='undefined'){toast('QR сан алга');return;}
@@ -1996,10 +2014,10 @@ function showWoQR(id){const w=woFind(id);if(!w)return;if(typeof qrcode==='undefi
 function woAddPartRow(){const sel=document.getElementById('wo_part');const id=+sel.value;const q=parseFloat(document.getElementById('wo_pqty').value)||0;
   if(!id||q<=0){toast('Сэлбэг/тоо буруу');return;}if(!window._woParts)window._woParts=[];window._woParts.push({partId:id,qty:q});renderWoParts();}
 function renderWoParts(){const el=document.getElementById('woPartList');if(!el)return;el.innerHTML=(window._woParts||[]).map((p,i)=>{const pt=(DB.parts||[]).find(x=>x.id===p.partId)||{};return `<span class="badge b-muted" style="margin:2px">${esc(pt.name||p.partId)} ×${p.qty} <a onclick="window._woParts.splice(${i},1);renderWoParts()" style="cursor:pointer;color:#ff4d4f">✕</a></span>`;}).join('');}
-function finalizeWO(id){const w=woFind(id);if(!w)return;
+async function finalizeWO(id){const w=woFind(id);if(!w)return;
   if(w.runningSince){if(!w.sessions)w.sessions=[];w.sessions.push({start:w.runningSince,end:new Date().toISOString().slice(0,16)});w.runningSince=null;}
   w.completeNote=(document.getElementById('wo_cnote')||{value:''}).value||'';
-  w.photos=(window._newPhotos||[]).slice();w.parts=(window._woParts||[]).slice();w.files=(window._woFiles||[]).slice();
+  w.photos=await uploadPending(window._newPhotos||[]);w.parts=(window._woParts||[]).slice();w.files=await uploadPending(window._woFiles||[]);
   w.parts.forEach(pp=>{const pt=(DB.parts||[]).find(x=>x.id===pp.partId);if(pt){pt.qty=Math.max(0,+pt.qty-pp.qty);if(!DB.partUsage)DB.partUsage=[];if(!DB.seq.usage)DB.seq.usage=0;DB.partUsage.push({id:++DB.seq.usage,partId:pt.id,date:iso(new Date()),qty:pp.qty,by:ME?ME.name:'',note:'WO '+w.no});}});
   w.status='Waiting Approval';w.completedAt=new Date().toISOString().slice(0,16);
   window._newPhotos=[];window._woParts=[];window._woFiles=[];const md=document.getElementById('woModal');if(md)md.remove();
@@ -2173,12 +2191,13 @@ function ensureLoto(){if(!DB.loto)DB.loto=[];if(!DB.seq.loto)DB.seq.loto=0;
     DB.loto.push({id:++DB.seq.loto,no:'ISO'+i.id,equip:i.equip||'',pd:isoPD(i)||'',lockNo:'',tagNo:'',point:'',source:'Цахилгаан',type:i.type||'Стандарт',
       by:i.by||'',verifiedBy:'',status:st==='Сэргээсэн'?'Released':'Applied',requestedAt:i.date||'',appliedAt:i.date||'',verifiedAt:'',releasedAt:st==='Сэргээсэн'?(i.date||''):'',note:i.note||'',photos:[]});});
     DB._isoMig=true;save();}}
-function createLoto(e){e.preventDefault();if(!canLoto()){toast('LOTO хийх эрхгүй');return;}
+async function createLoto(e){e.preventDefault();if(!canLoto()){toast('LOTO хийх эрхгүй');return;}
   if(!DB.loto)DB.loto=[];if(!DB.seq.loto)DB.seq.loto=0;
+  const photos=await uploadPending(window._newPhotos||[]);
   DB.loto.push({id:++DB.seq.loto,no:'LOTO'+Date.now().toString().slice(-8),equip:val('lo_equip').trim(),pd:val('lo_pd').trim(),type:val('lo_type'),
     lockNo:val('lo_lock').trim(),tagNo:val('lo_tag').trim(),point:val('lo_point').trim(),source:val('lo_source'),
     by:ME?ME.name:'',verifiedBy:'',status:'Requested',requestedAt:new Date().toISOString().slice(0,16),appliedAt:'',verifiedAt:'',releasedAt:'',
-    note:val('lo_note').trim(),photos:(window._newPhotos||[]).slice()});
+    note:val('lo_note').trim(),photos});
   window._newPhotos=[];audit('LOTO хүсэлт үүсгэв',val('lo_equip').trim());
   notify('🔒 LOTO хүсэлт\nТоног: '+(val('lo_equip')||val('lo_pd')||'—')+'\nЭрчмийн эх: '+val('lo_source')+'\nХийсэн: '+(ME?ME.name:''));
   save();toast('LOTO бүртгэгдлээ ✓');render();}
