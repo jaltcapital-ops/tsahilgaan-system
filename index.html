@@ -409,7 +409,7 @@ function pages(){let p=[...BASE_PAGES];
   if(ME&&ME.role==='ADMIN')p.push(['users','Хэрэглэгчид (Админ)','👥'],['perms','Эрхийн тохиргоо','🛡️'],['audit','Аудит бүртгэл','📜']);return p;}
 let CUR='dash';
 function go(p){if(p!==CUR)window._prevCUR=CUR;CUR=p;document.getElementById('side').classList.remove('open');renderNav();render();}
-function goBack(){const b=(window._prevCUR&&window._prevCUR!=='passport'&&window._prevCUR!=='pdpass')?window._prevCUR:(isWorker()?'home':'dash');go(b);}
+function goBack(){const b=(window._prevCUR&&window._prevCUR!=='passport'&&window._prevCUR!=='pdpass')?window._prevCUR:((isWorker()||isMobile())?'home':'dash');go(b);}
 /* ==== Sidebar config — шинэ цэс нэмэхэд энэ массивт нэг мөр нэмнэ ==== */
 const NAV_MENU=[
   {id:'ctl', gico:'📊', label:'Хяналт', items:[['dash','Dashboard','📊'],['notifs','Мэдэгдэл','🔔'],['news','Шинэ мэдээ','📰']]},
@@ -426,6 +426,7 @@ function toggleNavCol(){document.body.classList.toggle('navcol');localStorage.se
 const QUICK_ACTIONS=[['inspect','📱','QR Үзлэг хийх','QR'],['new','⚡','Гэмтэл бүртгэх','Гэмтэл'],['wo2','➕','Шинэ Work Order','WO'],['loto','🔒','LOTO үүсгэх','LOTO']];
 // Талбайн ажилтан (энгийн горим): "Тусгаарлалтын техникч"-ээс доош, гэхдээ автомат ахлах/инженер удирдлагыг оруулахгүй
 function isWorker(){if(!ME||ME.role==='ADMIN')return false;if(['AUTO_CHIEF','AUTO_EE'].includes(ME.role))return false;const idx=ROLES.findIndex(r=>r[0]===ME.role);const iso=ROLES.findIndex(r=>r[0]==='ISO_TECH');return idx>=0&&iso>=0&&idx>=iso;}
+function isMobile(){try{return window.matchMedia('(max-width:768px)').matches;}catch(e){return window.innerWidth<=768;}}
 const WORKER_HIDE_GROUPS=['sys','en'];   // ажилтнаас нуух бүлгүүд
 function renderNav(){const un=myUnread();const avail=pages();const byKey={};avail.forEach(p=>byKey[p[0]]=p);const open=navOpenState();const worker=isWorker();
   const link=(k,lbl,ic)=>{const badge=(k==='notifs'&&un>0)?`<span class="nbadge">${un}</span>`:'';return `<a class="${CUR===k?'active':''}" onclick="go('${k}')" title="${esc(lbl)}"><span class="ico">${ic}</span><span class="lbl">${esc(lbl)}</span>${badge}</a>`;};
@@ -2347,7 +2348,7 @@ function startApp(){document.getElementById('login').classList.add('hidden');
   if(localStorage.getItem('navcol')==='1')document.body.classList.add('navcol');
   try{ensurePerms();}catch(e){}
   try{ensureStaff();ensurePdEquip();}catch(e){}
-  if(isWorker())CUR='home';   // талбайн ажилтан → энгийн нүүр
+  if(isWorker()||isMobile())CUR='home';   // талбайн ажилтан эсвэл гар утаснаас нэвтэрвэл → энгийн нүүр
   applyTheme();startNotifPoll();
   renderNav();renderPresets();syncDates();render();
   try{const sp=new URLSearchParams(location.search);const eq=sp.get('eq'),pd=sp.get('pd'),wo=sp.get('wo');if(eq){openPassport(eq);}else if(pd){openPdPassport(pd);}else if(wo){go('wo2');setTimeout(()=>{const w=woFind(+wo);if(w)toast('Наряд: '+w.no+' · '+(wo2Label[w.status]||w.status));},300);}
