@@ -196,7 +196,8 @@ const publicUser = u => ({ id: u.id, username: u.username, name: u.name, role: u
 
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
-  const u = DB.users.find(x => x.username === username);
+  const uname = (username || '').trim().toLowerCase();
+  const u = DB.users.find(x => (x.username || '').toLowerCase() === uname);
   if (!u || !checkPw(password || '', u.pw)) return res.status(401).json({ error: 'Нэр эсвэл нууц үг буруу' });
   res.json({ token: sign({ id: u.id, username: u.username, name: u.name, role: u.role }), user: publicUser(u) });
 });
@@ -282,19 +283,21 @@ app.post('/api/upload', auth, async (req, res) => {
     const r = await fetch(FILE_API_URL + '/store', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': FILE_API_KEY },
-      body: JSON.stringify({ name: name || 'file', type: type || m[1], dataBase64: m[2] })
+      body: JSON.stringify({ name: name || 'file', type: type || m[1], dataBase64: m[2] }),
+      signal: AbortSignal.timeout(12000)
     });
     const j = await r.json();
     if (!r.ok) return res.status(r.status).json(j);
     res.status(201).json({ id: j.id, url: '/api/files/' + j.id });
   } catch (e) {
-    res.status(502).json({ error: 'Файл серверт холбогдож чадсангүй: ' + String(e && e.message || e) });
+    const timedOut = e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    res.status(502).json({ error: timedOut ? 'Файлын сервер хариу өгсөнгүй (timeout) — дахин оролдоно уу' : 'Файл серверт холбогдож чадсангүй: ' + String(e && e.message || e) });
   }
 });
 app.get('/api/files/:id', auth, async (req, res) => {
   if (!FILE_API_URL || !FILE_API_KEY) return res.status(503).json({ error: 'Файл хадгалах үйлчилгээ тохируулагдаагүй байна' });
   try {
-    const r = await fetch(FILE_API_URL + '/file/' + encodeURIComponent(req.params.id), { headers: { 'x-api-key': FILE_API_KEY } });
+    const r = await fetch(FILE_API_URL + '/file/' + encodeURIComponent(req.params.id), { headers: { 'x-api-key': FILE_API_KEY }, signal: AbortSignal.timeout(12000) });
     if (!r.ok) return res.status(r.status).end();
     res.setHeader('Content-Type', r.headers.get('content-type') || 'application/octet-stream');
     const buf = Buffer.from(await r.arrayBuffer());
@@ -318,7 +321,7 @@ app.post('/api/users', auth, adminOnly, async (req, res) => {
   const { username, name, password, role, phone, email } = req.body || {};
   if (!username || !name) return res.status(400).json({ error: 'Нэр, нэвтрэх нэр шаардлагатай' });
   if (!password && !email) return res.status(400).json({ error: 'Нууц үг эсвэл имэйл хаягийн аль нэгийг оруулна уу' });
-  if (DB.users.some(u => u.username === username)) return res.status(409).json({ error: 'Энэ нэвтрэх нэр бүртгэлтэй байна' });
+  if (DB.users.some(u => (u.username || '').toLowerCase() === (username || '').toLowerCase())) return res.status(409).json({ error: 'Энэ нэвтрэх нэр бүртгэлтэй байна' });
   const u = { id: ++DB.userSeq, username, name, role: role || 'EE', phone: phone || '', email: email || '', pw: '' };
   let setupToken = null;
   if (password) {
