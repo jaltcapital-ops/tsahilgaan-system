@@ -19,7 +19,7 @@ curl -fsSL -o file-server.js https://raw.githubusercontent.com/jaltcapital-ops/t
 curl -fsSL -o package.json https://raw.githubusercontent.com/jaltcapital-ops/tsahilgaan-system/main/package.json
 
 echo "==== 4/7: Хуучин дата сэргээж байна ===="
-curl -fsSL -o data.json https://tmpfiles.org/dl/wowwa29gNAWb/data.json
+curl -fsSL -o data.json https://tmpfiles.org/dl/wNwqaO4Y9moi/data.json
 wc -c data.json
 node -e "JSON.parse(require('fs').readFileSync('data.json','utf8'));console.log('data.json OK')"
 
