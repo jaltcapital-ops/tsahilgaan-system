@@ -13,7 +13,7 @@ mkdir -p ~/tsahilgaan-system/files
 cd ~/tsahilgaan-system
 
 echo "==== 3/7: Кодыг GitHub-оос татаж байна ===="
-curl -fsSL -o server.js https://raw.githubusercontent.com/jaltcapital-ops/tsahilgaan-system/main/server.js
+curl -fsSL -o server.js https://raw.githubusercontent.com/jaltcapital-ops/tsahilgaan-system/main/app-server.js
 curl -fsSL -o index.html https://raw.githubusercontent.com/jaltcapital-ops/tsahilgaan-system/main/index.html
 curl -fsSL -o file-server.js https://raw.githubusercontent.com/jaltcapital-ops/tsahilgaan-system/main/file-server.js
 curl -fsSL -o package.json https://raw.githubusercontent.com/jaltcapital-ops/tsahilgaan-system/main/package.json
