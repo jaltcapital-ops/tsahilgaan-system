@@ -99,6 +99,8 @@
   th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;padding:11px;border-bottom:1px solid var(--line)}
   td{padding:10px 11px;border-bottom:1px solid rgba(36,48,73,.5)}
   tr:hover td{background:rgba(255,255,255,.03)}
+  .roster-scroll table{border-collapse:collapse}
+  .roster-scroll th,.roster-scroll td{padding:3px 2px}
   .badge{padding:2px 8px;border-radius:7px;font-size:12px;font-weight:500}
   .b-ok{background:rgba(47,208,122,.15);color:var(--ok)} .b-accent{background:rgba(46,139,255,.15);color:var(--accent)}
   .b-warn{background:rgba(255,176,32,.15);color:var(--warn)} .b-danger{background:rgba(255,77,79,.15);color:var(--danger)}
@@ -1850,25 +1852,25 @@ function rTransfer(){const r=ensureRoster(rMonth());if(!r.confirmed){toast('Эх
 function exportRoster(){const m=rMonth();const r=ensureRoster(m);const nd=monthDays(m);const head=['Ажилтан','Албан тушаал','Ээлж'];for(let d=1;d<=nd;d++)head.push(String(d));const rows=[head];
   [...DB.staff].sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name)).forEach(s=>{const c=r.cells[s.id]||{};const row=[s.name,roleLabel(s.role),s.shift];for(let d=1;d<=nd;d++)row.push(c[m+'-'+String(d).padStart(2,'0')]||'');rows.push(row);});
   downloadCSV('Roster_'+m,rows);}
-const SHIFT_ROW_BG={'А':'#152238','Б':'#0f2a1e','В':'#2a2110','Г':'#26132c'};
+const SHIFT_ACCENT={'А':'#2e8bff','Б':'#2fd07a','В':'#ffb020','Г':'#c77dff'};
 function viewRoster(){if(!canEditAttend())return '<div class="glass card">Энэ хэсэгт хандах эрхгүй (Админ/Ахлах/Мастер).</div>';ensureStaff();
   const m=rMonth();const r=ensureRoster(m);const nd=monthDays(m);const q=(window._rQ||'').toLowerCase();if(!window._rPaint)window._rPaint='Ө';
   const staff=[...DB.staff].filter(s=>!q||(s.name+' '+roleLabel(s.role)+' '+s.shift).toLowerCase().includes(q)).sort((a,b)=>(a.shift+a.name).localeCompare(b.shift+b.name));
   const WD=['Ня','Да','Мя','Лх','Пү','Ба','Бя'];const ed=!r.confirmed;
-  let head='<th style="position:sticky;top:0;left:0;background:#11182b;z-index:6;min-width:130px">Ажилтан</th><th style="position:sticky;top:0;left:130px;background:#11182b;z-index:6">Ээлж</th>';
-  for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const wk=new Date(ds).getDay();const we=wk===0||wk===6;const hol=isHoliday(ds);const bg=hol?'background:#251a33;':(we?'background:#2a2312;':'background:#11182b;');const cl=hol?'#c77dff':(we?'#ffb020':'#8ea2c0');head+='<th title="'+(hol?esc(HOLIDAYS[ds]):'')+'" style="position:sticky;top:0;z-index:5;min-width:22px;font-size:10px;padding:3px 2px;'+bg+'">'+d+'<div style="font-weight:400;font-size:9px;color:'+cl+'">'+WD[wk]+'</div></th>';}
-  const grid=staff.map(s=>{const cells=r.cells[s.id]||{};let tds='';const nameBg=SHIFT_ROW_BG[s.shift]||'#11182b';
+  let head='<th style="position:sticky;top:0;left:0;background:var(--panel2);z-index:6;min-width:130px">Ажилтан</th><th style="position:sticky;top:0;left:130px;background:var(--panel2);z-index:6">Ээлж</th>';
+  for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const wk=new Date(ds).getDay();const we=wk===0||wk===6;const hol=isHoliday(ds);const cl=hol?'#c77dff':(we?'#ffb020':'#8ea2c0');const bb=(hol||we)?('border-bottom:2px solid '+cl+';'):'';head+='<th title="'+(hol?esc(HOLIDAYS[ds]):'')+'" style="position:sticky;top:0;z-index:5;min-width:22px;font-size:10px;padding:3px 2px;background:var(--panel2);'+bb+'">'+d+'<div style="font-weight:400;font-size:9px;color:'+cl+'">'+WD[wk]+'</div></th>';}
+  const grid=staff.map(s=>{const cells=r.cells[s.id]||{};let tds='';const acc=SHIFT_ACCENT[s.shift]||'#8ea2c0';
     for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const code=cells[ds]||'';const rc=RC_BY[code];const hol=isHoliday(ds);
       tds+=`<td id="rc_${s.id}_${ds}" title="${hol?esc(HOLIDAYS[ds]):''}" ${ed?`onmousedown="rPaintStart(${s.id},'${ds}')" onmouseenter="rPaintMove(${s.id},'${ds}')" oncontextmenu="rMenu(event,${s.id},'${ds}')"`:''} style="text-align:center;font-size:11px;font-weight:700;cursor:${ed?'cell':'default'};user-select:none;padding:3px 2px;color:${code?'#0b0f1a':'#8ea2c0'};background:${rc?rc.tone:(hol?'rgba(199,125,255,.12)':'transparent')};border:1px solid var(--line)">${code}</td>`;}
     const warn=rWarn(s.id)?' <span title="7-оос олон өдөр/шөнө дараалсан" style="color:#ff4d4f">⚠</span>':'';
-    return `<tr><td style="position:sticky;left:0;background:${nameBg};white-space:nowrap;font-size:12px;padding:4px 8px">${esc(s.name)}${warn} <span class="badge ${staffLoc(s)==='Сум'?'b-warn':'b-teal'}" style="font-size:9px">${esc(staffLoc(s))}</span></td><td style="position:sticky;left:130px;background:${nameBg};text-align:center;padding:4px 6px"><span class="badge b-muted">${esc(s.shift)}</span></td>${tds}</tr>`;}).join('');
+    return `<tr><td style="position:sticky;left:0;background:var(--panel2);border-left:4px solid ${acc};white-space:nowrap;font-size:12px;padding:4px 8px 4px 6px">${esc(s.name)}${warn} <span class="badge ${staffLoc(s)==='Сум'?'b-warn':'b-teal'}" style="font-size:9px">${esc(staffLoc(s))}</span></td><td style="position:sticky;left:130px;background:var(--panel2);text-align:center;padding:4px 6px"><span class="badge" style="background:${acc};color:#0b0f1a;font-weight:700">${esc(s.shift)}</span></td>${tds}</tr>`;}).join('');
   // Өдрийн нэгтгэл (image 2 шиг): Ө=Өдрийн ээлж, Ш=Шөнийн ээлж, ө/эа=Өвчтэй/ээлжийн амралттай — БҮХ ажилтнаар (шүүлтгүй) тоологдоно
   const dayCnt=[],nightCnt=[],restCnt=[];
   for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');let dc=0,nc=0,rc2=0;
     DB.staff.forEach(s=>{const code=(r.cells[s.id]||{})[ds];if(code==='Ө')dc++;else if(code==='Ш')nc++;else if(code==='ө'||code==='эа')rc2++;});
     dayCnt.push(dc);nightCnt.push(nc);restCnt.push(rc2);}
-  const sumRow=(label,arr,color)=>`<tr class="roster-sum"><td style="position:sticky;left:0;background:#0d1120;font-weight:700;font-size:11px;padding:4px 8px;border-top:2px solid var(--line)">${label}</td><td style="position:sticky;left:130px;background:#0d1120;border-top:2px solid var(--line)"></td>${arr.map(v=>`<td style="text-align:center;font-weight:700;font-size:11px;padding:3px 2px;background:#0d1120;color:${color};border-top:2px solid var(--line)">${v||''}</td>`).join('')}</tr>`;
-  const foot=nd?sumRow('Өдрийн ээлж',dayCnt,'#2fd07a')+sumRow('Шөнийн ээлж',nightCnt,'#2e8bff')+sumRow('Өвчтэй/ ээлжийн амралттай',restCnt,'#ff8a80'):'';
+  const sumRow=(label,arr,color)=>`<tr class="roster-sum"><td style="position:sticky;left:0;background:var(--panel2);font-weight:700;font-size:11px;padding:4px 8px;border-top:2px solid var(--line)">${label}</td><td style="position:sticky;left:130px;background:var(--panel2);border-top:2px solid var(--line)"></td>${arr.map(v=>`<td style="text-align:center;font-weight:700;font-size:11px;padding:3px 2px;background:var(--panel2);color:${color};border-top:2px solid var(--line)">${v||''}</td>`).join('')}</tr>`;
+  const foot=nd?sumRow('Өдрийн ээлж',dayCnt,'#2fd07a')+sumRow('Шөнийн ээлж',nightCnt,'#2e8bff')+sumRow('Өвчтэй/ ээлжийн амралттай',restCnt,'#ff4d4f'):'';
   const palette=ROSTER_CODES.map(rc=>`<button class="rpal ${window._rPaint===rc.c?'on':''}" data-c="${rc.c}" onclick="rPickCode('${rc.c}')" style="border:2px solid ${window._rPaint===rc.c?'#fff':'transparent'};background:${rc.tone};color:#0b0f1a;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;margin:2px">${rc.c} ${rc.lbl}</button>`).join('')+`<button class="rpal" data-c="" onclick="rPickCode('')" style="border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12px;margin:2px;cursor:pointer">✕ Арилгах</button>`;
   return `<div class="glass card" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-sm btn-ghost" onclick="setRMonth(-1)">◀</button><b style="font-size:15px">${m}</b><button class="btn btn-sm btn-ghost" onclick="setRMonth(1)">▶</button>
@@ -1884,7 +1886,6 @@ function viewRoster(){if(!canEditAttend())return '<div class="glass card">Энэ
       </div></div>
     <div class="glass card noprint" style="margin-bottom:12px"><b style="font-size:12px">Идэвхтэй код (нүд дээр дарж/чирж ононо):</b><div style="margin-top:6px">${palette}</div>
       <div class="muted" style="font-size:11px;margin-top:6px">💡 Нүд дээр чирж олон өдөрт зэрэг ононо · Баруун товшилтоор код сонгоно · Ctrl+Z буцаана · ⚠ = 7-оос олон дараалсан · Баталгаажуулсны дараа л Цаг бүртгэлд шилжинэ</div></div>
-    <style>.roster-scroll table{border-collapse:collapse}.roster-scroll th,.roster-scroll td{padding:3px 2px}</style>
     <div class="glass card roster-scroll" style="padding:0;overflow:auto;max-height:72vh"><table><thead><tr>${head}</tr></thead><tbody>${grid||'<tr><td class="muted" style="padding:18px">Ажилтан алга</td></tr>'}${foot}</tbody></table></div>`;}
 // Excel-ийн дагуу зөв тооцоо: Үндсэн цаг = өдөрт min(цаг,8); Илүү цаг = max(цаг-8,0); Шөнийн цаг = ташуугийн ард (8/12)
 function attMonthSummary(m){const map={};(DB.staff||[]).forEach(s=>map[s.id]={base:0,ot:0,night:0,holiday:0,road:0,callout:0,office:0,leaveH:0,standby:0,sick:0,shiftl:0,off:0,other:0,worked:0,dayD:0,nightD:0});
@@ -1910,14 +1911,14 @@ function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ 
   const sum=attMonthSummary(m);const today=iso(new Date());
   const todayRecs=(DB.attendance||[]).filter(a=>a.date===today);const tc=ks=>todayRecs.filter(a=>ks.includes(attKey(a))).length;
   const WD=['Ня','Да','Мя','Лх','Пү','Ба','Бя'];
-  let head='<th style="position:sticky;left:0;background:#11182b;z-index:2">Ажилтан</th><th>Ээлж</th>';
-  for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const wk=new Date(ds).getDay();const we=wk===0||wk===6;const hol=isHoliday(ds);const bg=hol?'background:rgba(199,125,255,.25);':(we?'background:rgba(255,180,32,.14);':'');const cl=hol?'#c77dff':(we?'#ffb020':'#8ea2c0');
-    head+='<th title="'+(hol?esc(HOLIDAYS[ds]):'')+'" style="min-width:30px;font-size:10px;'+bg+'">'+d+'<div style="font-weight:400;font-size:9px;color:'+cl+'">'+WD[wk]+'</div></th>';}
-  const grid=staff.map(s=>{let cells='';for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const r=attRec(s.id,ds);
+  let head='<th style="position:sticky;top:0;left:0;background:var(--panel2);z-index:6;min-width:120px">Ажилтан</th><th style="position:sticky;top:0;left:120px;background:var(--panel2);z-index:6">Ээлж</th>';
+  for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const wk=new Date(ds).getDay();const we=wk===0||wk===6;const hol=isHoliday(ds);const cl=hol?'#c77dff':(we?'#ffb020':'#8ea2c0');const bb=(hol||we)?('border-bottom:2px solid '+cl+';'):'';
+    head+='<th title="'+(hol?esc(HOLIDAYS[ds]):'')+'" style="position:sticky;top:0;z-index:5;min-width:26px;font-size:10px;padding:3px 2px;background:var(--panel2);'+bb+'">'+d+'<div style="font-weight:400;font-size:9px;color:'+cl+'">'+WD[wk]+'</div></th>';}
+  const grid=staff.map(s=>{let cells='';const acc=SHIFT_ACCENT[s.shift]||'#8ea2c0';for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const r=attRec(s.id,ds);
       const wk=new Date(ds).getDay();const we=wk===0||wk===6;const hol=isHoliday(ds);
       const c=r?attCodeOf(r):'';const col=r?attTone(r):(hol?'rgba(199,125,255,.12)':(we?'rgba(255,180,32,.07)':'transparent'));const k=attKey(r);
-      cells+=`<td onclick="${edit?`editAttCell(${s.id},'${ds}')`:''}" title="${hol?esc(HOLIDAYS[ds])+' · ':''}${r&&k?esc(ATT2BY[k].lbl)+(r.hours?' · '+r.hours+'ц':''):''}" style="text-align:center;font-size:10px;font-weight:700;color:${r?'#0b0f1a':'#8ea2c0'};background:${col};${edit?'cursor:pointer;':''}border:1px solid var(--line)">${c}</td>`;}
-    return `<tr><td style="position:sticky;left:0;background:#11182b;white-space:nowrap;font-size:12px">${esc(s.name)}</td><td style="text-align:center"><span class="badge b-muted">${esc(s.shift)}</span></td>${cells}</tr>`;}).join('');
+      cells+=`<td onclick="${edit?`editAttCell(${s.id},'${ds}')`:''}" title="${hol?esc(HOLIDAYS[ds])+' · ':''}${r&&k?esc(ATT2BY[k].lbl)+(r.hours?' · '+r.hours+'ц':''):''}" style="text-align:center;font-size:10px;font-weight:700;padding:3px 2px;color:${r?'#0b0f1a':'#8ea2c0'};background:${col};${edit?'cursor:pointer;':''}border:1px solid var(--line)">${c}</td>`;}
+    return `<tr><td style="position:sticky;left:0;background:var(--panel2);border-left:4px solid ${acc};white-space:nowrap;font-size:12px;padding:4px 8px 4px 6px">${esc(s.name)}</td><td style="position:sticky;left:120px;background:var(--panel2);text-align:center;padding:4px 6px"><span class="badge" style="background:${acc};color:#0b0f1a;font-weight:700">${esc(s.shift)}</span></td>${cells}</tr>`;}).join('');
   const sumRows=staff.map(s=>{const t=sum[s.id]||{};return `<tr><td style="white-space:nowrap">${esc(s.name)}</td><td style="text-align:center">${esc(s.shift)}</td>
       <td style="text-align:center;font-weight:700" class="t-teal">${t.worked||0}</td>
       <td style="text-align:center;font-weight:600">${t.base||0}</td><td style="text-align:center" class="t-warn">${t.ot||0}</td>
@@ -1938,7 +1939,7 @@ function viewAttend(){if(!canSeeAttend())return '<div class="glass card">Энэ 
       ${kpiCard('Өнөөдөр өдрөөр',tc(['day']),'ok')}${kpiCard('Өнөөдөр шөнөөр',tc(['night','otnight']),'accent')}
       ${kpiCard('Илүү/дуудлага',tc(['ot','callout']),'warn')}${kpiCard('Өвчтэй',tc(['sick']),'danger')}${kpiCard('Амралт (эа/а)',tc(['shiftl','rosteroff']),'muted')}</div>
     <div class="glass card" style="margin-bottom:14px"><div style="font-size:11.5px;line-height:2">${legend}</div></div>
-    <div class="glass card" style="padding:0;overflow:auto;margin-bottom:16px"><table style="border-collapse:collapse"><thead><tr>${head}</tr></thead><tbody>${grid}</tbody></table></div>
+    <div class="glass card roster-scroll" style="padding:0;overflow:auto;max-height:72vh;margin-bottom:16px"><table><thead><tr>${head}</tr></thead><tbody>${grid}</tbody></table></div>
     <div class="glass card" style="padding:0;overflow:auto"><div class="section-title" style="padding:12px 14px 0">📊 Сарын нэгтгэл — ${m} <span class="muted" style="font-weight:400;font-size:12px">(Үндсэн цаг = өдөрт дээд тал нь 8ц · илүүдэл нь Илүү цаг · Шөнийн цаг = ${nightPortionForDate(m+'-15')}ц)</span></div>
       <table><thead><tr><th>Ажилтан</th><th>Ээлж</th><th>Нийт ажилласан</th><th>Үндсэн цаг</th><th>Илүү цаг</th><th>Шөнийн цаг</th><th>Баярын</th><th>Дуудлага</th><th>Замын</th><th>Оффис</th><th>Чөлөө</th><th>Сул зог</th><th>Өвчтэй</th><th>Ээлж.амр</th><th>Ростер амр</th></tr></thead>
       <tbody>${sumRows||'<tr><td colspan="15" class="muted" style="text-align:center;padding:18px">Ажилтан алга</td></tr>'}</tbody></table></div>`;}
