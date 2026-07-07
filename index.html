@@ -225,11 +225,12 @@ async function uploadPending(list){
   return out;
 }
 function photoSrc(d){return (typeof d==='string')?d:(d.url||d.data||'');}
-let saveT=null;
-function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
+let saveT=null;window._dirty=false;
+function save(){clearTimeout(saveT);window._dirty=true;saveT=setTimeout(()=>{
   fetch('/api/data',{method:'PUT',headers:jsonHdr(),body:JSON.stringify(DB)})
-    .then(r=>{if(!r.ok)r.json().then(e=>toast(e.error||'Хадгалах алдаа гарлаа'));});},250);}
-function saveNow(){clearTimeout(saveT);return fetch('/api/data',{method:'PUT',headers:jsonHdr(),body:JSON.stringify(DB)}).then(r=>{if(!r.ok)return r.json().then(e=>{toast(e.error||'Хадгалах алдаа');});}).catch(()=>{});}
+    .then(r=>{if(!r.ok){r.json().then(e=>toast(e.error||'Хадгалах алдаа гарлаа'));return;}window._dirty=false;})
+    .catch(()=>{toast('⚠ Сүлжээний алдаа — 2 секундын дараа дахин оролдоно');setTimeout(save,2000);});},250);}
+function saveNow(){clearTimeout(saveT);return fetch('/api/data',{method:'PUT',headers:jsonHdr(),body:JSON.stringify(DB)}).then(r=>{if(!r.ok)return r.json().then(e=>{toast(e.error||'Хадгалах алдаа');});window._dirty=false;}).catch(()=>{toast('⚠ Сүлжээний алдаа — хадгалагдсангүй');});}
 function notify(text){fetch('/api/notify',{method:'POST',headers:jsonHdr(),body:JSON.stringify({text})})
   .then(r=>r.json()).then(d=>{if(d&&d.ok)toast('Telegram мэдэгдэл илгээгдлээ ✓');}).catch(()=>{});}
 function audit(action,detail){try{if(!DB)return;if(!DB.audit)DB.audit=[];if(!DB.seq)DB.seq={};if(!DB.seq.audit)DB.seq.audit=0;
@@ -1866,12 +1867,12 @@ function viewRoster(){if(!canEditAttend())return '<div class="glass card">Энэ
   const WD=['Ня','Да','Мя','Лх','Пү','Ба','Бя'];const ed=!r.confirmed;
   let head='<th style="position:sticky;top:0;left:0;background:var(--panel2);z-index:6;min-width:130px">Ажилтан</th><th style="position:sticky;top:0;left:130px;background:var(--panel2);z-index:6">Ээлж</th>';
   for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const wk=new Date(ds).getDay();const we=wk===0||wk===6;const hol=isHoliday(ds);const cl=hol?'#c77dff':(we?'#ffb020':'#8ea2c0');const bb=(hol||we)?('border-bottom:2px solid '+cl+';'):'';head+='<th title="'+(hol?esc(HOLIDAYS[ds]):'')+'" style="position:sticky;top:0;z-index:5;min-width:22px;font-size:10px;padding:3px 2px;background:var(--panel2);'+bb+'">'+d+'<div style="font-weight:400;font-size:9px;color:'+cl+'">'+WD[wk]+'</div></th>';}
-  const filt=window._rFilterCode||'';
+  const filt=window._rFilterCode||'';const dayFilt=window._rFilterDay||'';
   const grid=staff.map(s=>{const cells=r.cells[s.id]||{};let tds='';const acc=SHIFT_ACCENT[s.shift]||'#8ea2c0';
     let eaN=0,offN=0,sickN=0;
     for(let d=1;d<=nd;d++){const ds=m+'-'+String(d).padStart(2,'0');const code=cells[ds]||'';const rc=RC_BY[code];const hol=isHoliday(ds);
       if(code==='эа')eaN++;else if(code==='а')offN++;else if(code==='ө')sickN++;
-      const dim=filt&&code!==filt?'opacity:.15;':'';
+      const dim=((filt&&code!==filt)||(dayFilt&&+dayFilt!==d))?'opacity:.15;':'';
       tds+=`<td id="rc_${s.id}_${ds}" title="${hol?esc(HOLIDAYS[ds]):''}" ${ed?`onmousedown="rPaintStart(${s.id},'${ds}')" onmouseenter="rPaintMove(${s.id},'${ds}')" oncontextmenu="rMenu(event,${s.id},'${ds}')"`:''} style="text-align:center;font-size:11px;font-weight:700;cursor:${ed?'cell':'default'};user-select:none;padding:3px 2px;${dim}color:${code?'#0b0f1a':'#8ea2c0'};background:${rc?rc.tone:(hol?'rgba(199,125,255,.12)':'transparent')};border:1px solid var(--line)">${code}</td>`;}
     const warn=rWarn(s.id)?' <span title="7-оос олон өдөр/шөнө дараалсан" style="color:#ff4d4f">⚠</span>':'';
     const cntBadge=(eaN||offN||sickN)?` <span class="muted" style="font-size:9px" title="эа/а/ө тоо">эа:${eaN} а:${offN} ө:${sickN}</span>`:'';
@@ -1890,6 +1891,7 @@ function viewRoster(){if(!canEditAttend())return '<div class="glass card">Энэ
       ${r.confirmed?'<span class="badge b-ok">✔ Баталгаажсан</span>':'<span class="badge b-warn">Ноорог</span>'}
       <input placeholder="🔍 нэр / албан тушаал / ээлж" value="${esc(window._rQ||'')}" oninput="window._rQ=this.value;render()" style="max-width:220px">
       <select onchange="window._rFilterCode=this.value;render()" style="max-width:160px" title="Код шүүлт — сонгосон кодтой нүдийг тодруулна">${filterOpts}</select>
+      <select onchange="window._rFilterDay=this.value;render()" style="max-width:110px" title="Өдрөөр шүүх — сонгосон өдрийг тодруулна"><option value="">Бүх өдөр</option>${Array.from({length:nd},(_,i)=>i+1).map(d=>`<option value="${d}" ${String(dayFilt)===String(d)?'selected':''}>${d}-нд</option>`).join('')}</select>
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
         ${ed?'<button class="btn btn-sm" onclick="rPattern()">🔄 14/14 автомат</button>':''}
         ${ed?'<button class="btn btn-sm btn-ghost" onclick="rUndo()" title="Ctrl+Z">↶</button>':''}
@@ -2304,7 +2306,7 @@ async function checkEscalations(){if(!ME||!['ADMIN','CHIEF','MASTER'].includes(M
     notify(msg);pushNotif('*',msg);notifyBrowser('🚨 Эгзэгтэй гэмтэл',(w.equip||'')+' — '+ESCALATE_H+'ц+ засагдаагүй');});
   if(changed)await saveNow();}
 function startNotifPoll(){if(_notifTimer)clearInterval(_notifTimer);_lastUnread=myUnread();
-  _notifTimer=setInterval(async()=>{try{const fresh=await api('/api/data',{headers:authHdr()});DB=fresh;normalizeDB();const u=myUnread();renderNav();
+  _notifTimer=setInterval(async()=>{try{if(window._dirty){await saveNow();}const fresh=await api('/api/data',{headers:authHdr()});DB=fresh;normalizeDB();const u=myUnread();renderNav();
     if(u>_lastUnread){const n=(DB.notifs||[]).filter(x=>x.toName===ME.name||x.toName==='*').slice(-1)[0];notifyBrowser('🔔 Шинэ мэдэгдэл',n?n.text:'Танд шинэ мэдэгдэл байна');}
     _lastUnread=u;await checkEscalations();await checkInspections();}catch(e){}},45000);}
 /* ---- Global search / Command palette (Sprint 11) ---- */
