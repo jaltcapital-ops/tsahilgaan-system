@@ -197,7 +197,8 @@ const authHdr=()=>({Authorization:'Bearer '+TOKEN});
 const jsonHdr=()=>({...authHdr(),'Content-Type':'application/json'});
 async function api(path,opts={}){const r=await fetch(path,opts);if(r.status===401){logout();throw new Error('auth');}
   const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Алдаа');return d;}
-async function apiLoad(){DB=await api('/api/data',{headers:authHdr()});}
+function normalizeDB(){if(!DB)return;DB.areas=DB.areas||[];DB.types=DB.types||[];DB.engineers=DB.engineers||[];DB.isoPersons=DB.isoPersons||[];DB.checkItems=DB.checkItems||[];DB.pdList=DB.pdList||[];DB.wos=DB.wos||[];DB.naryad=DB.naryad||[];DB.energy=DB.energy||[];DB.reports=DB.reports||[];DB.notifs=DB.notifs||[];DB.staff=DB.staff||[];DB.equip=DB.equip||[];}
+async function apiLoad(){DB=await api('/api/data',{headers:authHdr()});normalizeDB();}
 // Зураг/файлын жагсаалтыг (Хадгалах дарахаас ЯГ ӨМНӨ, await-аар) дотоод файл-серверт байршуулж,
 // жижиг лавлагаа {id,url,name,type} болгож хувиргана. Сонгосон мөчид биш, ЗӨВХӨН хадгалах мөчид upload хийснээр
 // "хурдан дарчихвал upload дуусаагүй атлаа хадгалагдчихна" гэсэн race condition-ыг бүрэн арилгана.
@@ -2303,7 +2304,7 @@ async function checkEscalations(){if(!ME||!['ADMIN','CHIEF','MASTER'].includes(M
     notify(msg);pushNotif('*',msg);notifyBrowser('🚨 Эгзэгтэй гэмтэл',(w.equip||'')+' — '+ESCALATE_H+'ц+ засагдаагүй');});
   if(changed)await saveNow();}
 function startNotifPoll(){if(_notifTimer)clearInterval(_notifTimer);_lastUnread=myUnread();
-  _notifTimer=setInterval(async()=>{try{const fresh=await api('/api/data',{headers:authHdr()});DB=fresh;const u=myUnread();renderNav();
+  _notifTimer=setInterval(async()=>{try{const fresh=await api('/api/data',{headers:authHdr()});DB=fresh;normalizeDB();const u=myUnread();renderNav();
     if(u>_lastUnread){const n=(DB.notifs||[]).filter(x=>x.toName===ME.name||x.toName==='*').slice(-1)[0];notifyBrowser('🔔 Шинэ мэдэгдэл',n?n.text:'Танд шинэ мэдэгдэл байна');}
     _lastUnread=u;await checkEscalations();await checkInspections();}catch(e){}},45000);}
 /* ---- Global search / Command palette (Sprint 11) ---- */
