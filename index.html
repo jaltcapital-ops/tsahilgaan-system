@@ -197,7 +197,7 @@ const authHdr=()=>({Authorization:'Bearer '+TOKEN});
 const jsonHdr=()=>({...authHdr(),'Content-Type':'application/json'});
 async function api(path,opts={}){const r=await fetch(path,opts);if(r.status===401){logout();throw new Error('auth');}
   const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Алдаа');return d;}
-function normalizeDB(){if(!DB)return;DB.areas=DB.areas||[];DB.types=DB.types||[];DB.engineers=DB.engineers||[];DB.isoPersons=DB.isoPersons||[];DB.checkItems=DB.checkItems||[];DB.pdList=DB.pdList||[];DB.wos=DB.wos||[];DB.naryad=DB.naryad||[];DB.energy=DB.energy||[];DB.reports=DB.reports||[];DB.notifs=DB.notifs||[];DB.staff=DB.staff||[];DB.equip=DB.equip||[];}
+function normalizeDB(){if(!DB)return;DB.areas=DB.areas||[];DB.attendance=DB.attendance||[];DB.audit=DB.audit||[];DB.checkItems=DB.checkItems||[];DB.energy=DB.energy||[];DB.engineers=DB.engineers||[];DB.equip=DB.equip||[];DB.inspections=DB.inspections||[];DB.isoPersons=DB.isoPersons||[];DB.isolations=DB.isolations||[];DB.loto=DB.loto||[];DB.naryad=DB.naryad||[];DB.news=DB.news||[];DB.notifs=DB.notifs||[];DB.partUsage=DB.partUsage||[];DB.parts=DB.parts||[];DB.pdList=DB.pdList||[];DB.reports=DB.reports||[];DB.roster=DB.roster||[];DB.staff=DB.staff||[];DB.types=DB.types||[];DB.wos=DB.wos||[];}
 async function apiLoad(){DB=await api('/api/data',{headers:authHdr()});normalizeDB();}
 // Зураг/файлын жагсаалтыг (Хадгалах дарахаас ЯГ ӨМНӨ, await-аар) дотоод файл-серверт байршуулж,
 // жижиг лавлагаа {id,url,name,type} болгож хувиргана. Сонгосон мөчид биш, ЗӨВХӨН хадгалах мөчид upload хийснээр
